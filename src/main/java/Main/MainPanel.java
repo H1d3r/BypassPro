@@ -3,55 +3,43 @@ package Main;
 import burp.BurpExtender;
 import burp.ITab;
 import org.apache.commons.lang3.StringUtils;
-import org.yaml.snakeyaml.Yaml;
 
-import java.awt.Component;
-import java.awt.FlowLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.InputStream;
-import java.util.Map;
+import java.awt.*;
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 
 /**
- * Main display panel
+ * 主面板：包含 Dashboard 和 Config 两个页签
  */
 public class MainPanel extends JPanel implements ITab {
 
+    private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.85;
+    private static final int DEFAULT_THREAD_NUM = 5;
+
     private BypassTableModel bypassTableModel;
     private JTextField threadNumText;
-    private JTextField allRequestNumberText;
-    private JTextField finishRequestNumberText;
-    private JTextField errorRequestNumText;
+    private JLabel allRequestNumberText;
+    private JLabel finishRequestNumberText;
+    private JLabel errorRequestNumText;
     private JCheckBox isAutoCheckBox;
+    private ConfigPanel configPanel;
+    private ManualWafPanel manualWafPanel;
+    private JProgressBar progressBar;
 
     public MainPanel() {
 
-        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+        setLayout(new BorderLayout());
 
-        // main split pane
+        // 主分割面板
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
 
-        // table of log entries
+        // 结果表格
         bypassTableModel = new BypassTableModel();
         BypassTable bypassTable = new BypassTable(bypassTableModel);
-/*        // 设置某些单元格内容居中
-        DefaultTableCellRenderer cellRenderer = new DefaultTableCellRenderer();
-        cellRenderer.setHorizontalAlignment((int) JTextField.CENTER_ALIGNMENT);
-        bypassTable.getColumn("id").setCellRenderer(cellRenderer);*/
-
         JScrollPane scrollPane = new JScrollPane(bypassTable);
-
         splitPane.setLeftComponent(scrollPane);
 
-        // tabs with request/response viewers
-/*        JTabbedPane tabs = new JTabbedPane();
-        tabs.setBorder(BorderFactory.createLineBorder(Color.black));
-        tabs.addTab("Request", bypassTable.getRequestViewer().getComponent());
-        tabs.addTab("Response", bypassTable.getResponseViewer().getComponent());
-        splitPane.setRightComponent(tabs);*/
-
-        // request response 双窗格显示
+        // Request/Response 双窗格
         JSplitPane httpSplitPane = new JSplitPane();
         httpSplitPane.setResizeWeight(0.50);
         // request
@@ -65,90 +53,69 @@ public class MainPanel extends JPanel implements ITab {
         splitPane.setRightComponent(httpSplitPane);
 
 
-        // 配置框 controlPanel
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        isAutoCheckBox = new JCheckBox("Passive Scan", false);
+        // 控制面板
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+        controlPanel.setBorder(new EmptyBorder(4, 8, 4, 8));
+
+        isAutoCheckBox = new JCheckBox("Auto Scan", false);
+        isAutoCheckBox.addActionListener(e -> Utils.isProxySelected = isAutoCheckBox.isSelected());
         controlPanel.add(isAutoCheckBox);
-        //构造一个监听器，响应checkBox事件
-        ActionListener actionListener = new ActionListener(){
-            public void actionPerformed(ActionEvent e) {
-                if(isAutoCheckBox.isSelected())
-                {
-                    Utils.isProxySelected = true;
-                } else
-                {
-                    Utils.isProxySelected = false;
-                }
-            }
-        };
-        isAutoCheckBox.addActionListener(actionListener);
 
-
-        JLabel threadNumLabel = new JLabel("Thread Num:");
-        controlPanel.add(threadNumLabel);
-
-        threadNumText = new JTextField(10);
-        threadNumText.setText("5");
+        controlPanel.add(new JLabel("Threads:"));
+        threadNumText = new JTextField(2);
+        threadNumText.setText(String.valueOf(Utils.getConfigThreads(DEFAULT_THREAD_NUM)));
         controlPanel.add(threadNumText);
 
+        controlPanel.add(Box.createHorizontalStrut(8));
 
-        JLabel allRequestNumberLabel = new JLabel("AllRequest Num:");
-        controlPanel.add(allRequestNumberLabel);
-        allRequestNumberText = new JTextField(5);
-        allRequestNumberText.setText("0");
-        allRequestNumberText.setEditable(false);
+        controlPanel.add(new JLabel("Req:"));
+        allRequestNumberText = new JLabel("0");
         controlPanel.add(allRequestNumberText);
 
-        JLabel finishNumberLabel = new JLabel("Finish Num:");
-        controlPanel.add(finishNumberLabel);
-        finishRequestNumberText = new JTextField(5);
-        finishRequestNumberText.setText("0");
-        finishRequestNumberText.setEditable(false);
+        controlPanel.add(new JLabel("/"));
+        finishRequestNumberText = new JLabel("0");
         controlPanel.add(finishRequestNumberText);
 
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(false);
+        progressBar.setValue(0);
+        progressBar.setBorderPainted(false);
+        progressBar.setPreferredSize(new Dimension(120, 6));
+        controlPanel.add(progressBar);
 
-        JLabel errorRequestNumLabel = new JLabel("Error Num:");
-        controlPanel.add(errorRequestNumLabel);
-        errorRequestNumText = new JTextField(5);
-        errorRequestNumText.setText("0");
-        errorRequestNumText.setEditable(false);
+        controlPanel.add(Box.createHorizontalStrut(8));
+
+        controlPanel.add(new JLabel("Err:"));
+        errorRequestNumText = new JLabel("0");
         controlPanel.add(errorRequestNumText);
 
+        controlPanel.add(Box.createHorizontalStrut(8));
 
         JButton clearButton = new JButton("Clear");
-
-        controlPanel.add(clearButton);
-
+        clearButton.setMargin(new Insets(2, 8, 2, 8));
         clearButton.addActionListener(e -> {
-            bypassTableModel.getBypassArray().clear();
-            bypassTableModel.fireTableDataChanged();
+            bypassTableModel.clearAll();
             allRequestNumberText.setText("0");
             finishRequestNumberText.setText("0");
             errorRequestNumText.setText("0");
             Utils.count = 0;
+            updateProgressBar();
         });
+        controlPanel.add(clearButton);
 
-        controlPanel.setAlignmentX(0);
+        JPanel databoardPanel = new JPanel(new BorderLayout());
+        databoardPanel.add(controlPanel, BorderLayout.NORTH);
+        databoardPanel.add(splitPane, BorderLayout.CENTER);
 
-        // 添加重载配置文件控件
-        JButton reconfigButton = new JButton("reconfig");
+        this.configPanel = new ConfigPanel();
+        this.manualWafPanel = new ManualWafPanel();
 
-        controlPanel.add(reconfigButton);
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Dashboard", databoardPanel);
+        tabs.addTab("Manual WAF", this.manualWafPanel);
+        tabs.addTab("Config", this.configPanel);
 
-        reconfigButton.addActionListener(e -> {
-            Map<String, Object> config = Utils.loadConfig("/BypassPro-config.yaml");
-            Utils.setConfigMap(config);
-            System.out.println("reconfig success...");
-
-        });
-
-
-        // todo:添加filter
-
-
-
-        add(controlPanel);
-        add(splitPane);
+        add(tabs, BorderLayout.CENTER);
 
         BurpExtender.callbacks.customizeUiComponent(this);
     }
@@ -164,12 +131,14 @@ public class MainPanel extends JPanel implements ITab {
     }
 
     public int getThreadNum() {
-
         if(StringUtils.isBlank(threadNumText.getText())) {
-            return 5;
+            return DEFAULT_THREAD_NUM;
         }
-
-        return Integer.parseInt(threadNumText.getText());
+        try {
+            return Integer.parseInt(threadNumText.getText());
+        } catch (NumberFormatException e) {
+            return DEFAULT_THREAD_NUM;
+        }
     }
 
     public BypassTableModel getBypassTableModel() {
@@ -182,15 +151,45 @@ public class MainPanel extends JPanel implements ITab {
     }
 
     public void addAllRequestNum(int num) {
-        setAllRequestNumberText(Integer.parseInt(allRequestNumberText.getText()) + num);
+        SwingUtilities.invokeLater(() -> {
+            setAllRequestNumberText(Integer.parseInt(allRequestNumberText.getText()) + num);
+            updateProgressBar();
+        });
     }
 
     public void addFinishRequestNum(int num) {
-        finishRequestNumberText.setText(String.valueOf(Integer.parseInt(finishRequestNumberText.getText()) + num));
+        SwingUtilities.invokeLater(() -> {
+            finishRequestNumberText.setText(String.valueOf(Integer.parseInt(finishRequestNumberText.getText()) + num));
+            updateProgressBar();
+        });
     }
 
     public void addErrorRequestNum(int num) {
-        errorRequestNumText.setText(String.valueOf(Integer.parseInt(errorRequestNumText.getText()) + num));
+        SwingUtilities.invokeLater(() -> errorRequestNumText.setText(String.valueOf(Integer.parseInt(errorRequestNumText.getText()) + num)));
+    }
+
+    public double getSimilarityThreshold() {
+        // 统一从 Config 中读取，Dashboard 不再单独维护阈值输入框
+        return Utils.getConfigSimilarityThreshold(DEFAULT_SIMILARITY_THRESHOLD);
+    }
+
+    private void updateProgressBar() {
+        if (progressBar == null) return;
+        int all = 0, finish = 0;
+        try {
+            all = Integer.parseInt(allRequestNumberText.getText());
+            finish = Integer.parseInt(finishRequestNumberText.getText());
+        } catch (Exception ignored) {}
+
+        if (all <= 0) {
+            progressBar.setIndeterminate(false);
+            progressBar.setValue(0);
+        } else if (finish >= all) {
+            progressBar.setIndeterminate(false);
+            progressBar.setValue(100);
+        } else {
+            progressBar.setIndeterminate(true);
+        }
     }
 
 
@@ -200,5 +199,18 @@ public class MainPanel extends JPanel implements ITab {
 
     public void setIsAutoCheckBox(JCheckBox isAutoCheckBox) {
         this.isAutoCheckBox = isAutoCheckBox;
+    }
+
+    /**
+     * 从配置文件更新 UI 默认值
+     */
+    public void updateFromConfig() {
+        SwingUtilities.invokeLater(() -> {
+            threadNumText.setText(String.valueOf(Utils.getConfigThreads(DEFAULT_THREAD_NUM)));
+        });
+    }
+
+    public ManualWafPanel getManualWafPanel() {
+        return manualWafPanel;
     }
 }

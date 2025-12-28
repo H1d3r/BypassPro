@@ -1,0 +1,229 @@
+# ==========================================================
+# 通用配置
+# ==========================================================
+general:
+  threads: 5                    # 默认线程数
+  similarity_threshold: 0.85    # 相似度阈值（低于此值才入表）
+
+profiles:
+  access_control:
+    # Auto Scan 忽略的静态资源后缀（不区分大小写）
+    ignore_extensions:
+      # --- 静态资源后缀（避免 Auto Scan 造成噪声/额外请求） ---
+      - js
+      - css
+      - png
+      - gif
+      - jpg
+      - jpeg
+      - ico
+      - svg
+      - woff
+      - woff2
+      - ttf
+      - eot
+      - mp4
+      - mp3
+      - tif
+      - swf
+      - wmv
+      - map
+      - webp
+      - zip
+      - exe
+      - so
+      - rar
+      - gz
+      - iso
+      - avi
+      - pdf
+      - doc
+      - docx
+      - xls
+      - xlsx
+
+    suffix:
+      # --- Group A: 静态资源伪装（常见，用于绕过某些 Auth Filter / 规则误判） ---
+      - ".js"
+      - ".css"
+      - ".json"
+      - ".html"
+      - ";.css"
+      - ";.js"
+      # [新增] 矩阵参数/路径参数
+      - ";param=1"
+      - ";jsessionid=1"
+      - ";user=1"
+      - ";f=1"
+
+      # --- Group B: URL 结尾符号/分隔符混淆（针对不同组件的解析差异） ---
+      - "/."
+      - "/"
+      - "/./"
+      - "%20"
+      - "%09"
+      - "?"
+      - "?error"
+      - "#"
+      - "/*"
+      - "%26"
+
+      # --- Group C: 伪目录回退/路径穿越（欺骗上游/后端的路径规范化） ---
+      - "/images/..;"
+      - "/public/..;"
+      - ";/"
+
+    headers:
+      # --- Group: Header 伪造（常见代理头/IP 相关） ---
+      -
+        X-Custom-IP-Authorization: 127.0.0.1
+        X-Forwarded-For: 127.0.0.1
+        X-Client-IP: 127.0.0.1
+        X-Remote-Addr: 127.0.0.1
+        X-Originating-IP: 127.0.0.1
+        Referer: http://127.0.0.1
+
+      - X-Forwarded-For: 127.0.0.1:80
+      - X-Forwarded-For: http://127.0.0.1
+      - X-Host: 127.0.0.1
+      - HTTP-Version: HTTP/1.0
+
+    prefix:
+      # --- Group A: 目录层级/分隔符混淆（在路径的某一段前插入） ---
+      - "/"             # 双斜杠
+      - ";/"            # 分号斜杠（Tomcat 矩阵参数）
+      - "./"            # 当前目录
+      - ".;/"           # 点分号（Tomcat）
+
+      # --- Group B: 编码绕过（对路径段做前缀编码） ---
+      - "%2e/"          # 编码点
+      - "%252e/"        # 双重编码点
+      - "%20/"          # 空格
+      - "%09/"          # tab
+      - "..%5c/"        # 反斜杠（IIS）
+
+      # --- Group C: 结合伪目录（构造“看起来像静态资源/公共目录”的路径） ---
+      - "images;/../"   # 假静态目录 + 回退
+      - "images/..;/"   # 假静态目录 + 分号回退
+      - "public/..;/"   # 同上
+
+    # 目录边界插入（一次只插一个边界）：a/b/c -> a;/b/c、a/b;/c
+    boundary_insert:
+      # --- Group A: 矩阵参数/路径参数（Segment 内追加 ;xxx，针对 Spring/Tomcat 的解析差异） ---
+      - ";"
+      - ";param=1"
+      - ";jsessionid=1"
+
+      # --- Group B: 点分号/回退类（老框架/容器差异） ---
+      - ".;"
+      - "..;"
+
+      # --- Group C: 编码类（在某一段末尾插入编码 token） ---
+      - "%00"
+      - "%2e"
+
+  # 预留：手动 WAF 模式规则集（未配置时会回退到 access_control）
+  waf:
+    # 默认复用 access_control（很多访问控制绕过变体同样适用于“被拦截/被拦截页”场景的验证）
+    suffix:
+      # --- Group A: 静态资源伪装（常见，用于绕过 Auth Filter / 规则误判） ---
+      - ".js"
+      - ".css"
+      - ".json"
+      - ".html"
+      - ";.css"
+      - ";.js"
+
+      # --- Group B: URL 结尾符号/分隔符混淆（针对不同组件的解析差异） ---
+      - "/."
+      - "/"
+      - "/./"
+      - "%20"
+      - "%09"
+      - "?"
+      - "?error"
+      - "#"
+      - "/*"
+      - "%26"
+
+      # --- Group C: 伪目录回退/路径穿越（欺骗上游/后端的路径规范化） ---
+      - "/images/..;"
+      - "/public/..;"
+      - ";/"
+
+    headers:
+      # --- Group: Header 伪造（常见代理头/IP 相关） ---
+      -
+        X-Custom-IP-Authorization: 127.0.0.1
+        X-Forwarded-For: 127.0.0.1
+        X-Client-IP: 127.0.0.1
+        X-Remote-Addr: 127.0.0.1
+        X-Originating-IP: 127.0.0.1
+        Referer: http://127.0.0.1
+
+      - X-Forwarded-For: 127.0.0.1:80
+      - X-Forwarded-For: http://127.0.0.1
+      - X-Host: 127.0.0.1
+      - HTTP-Version: HTTP/1.0
+
+    prefix:
+      # --- Group A: 目录层级/分隔符混淆（在路径的某一段前插入） ---
+      - "/"
+      - ";/"
+      - "./"
+      - ".;/"
+
+      # --- Group B: 编码绕过（对路径段做前缀编码） ---
+      - "%2e/"
+      - "%252e/"
+      - "%20/"
+      - "%09/"
+      - "..%5c/"
+
+      # --- Group C: 结合伪目录（构造“看起来像静态资源/公共目录”的路径） ---
+      - "images;/../"
+      - "images/..;/"
+      - "public/..;/"
+
+    boundary_insert:
+      # --- Group A: 矩阵参数/路径参数（Segment 内追加 ;xxx，针对 Spring/Tomcat 的解析差异） ---
+      - ";"
+      - ";param=1"
+      - ";jsessionid=1"
+
+      # --- Group B: 点分号/回退类（老框架/容器差异） ---
+      - ".;"
+      - "..;"
+
+      # --- Group C: 编码类（在某一段末尾插入编码 token） ---
+      - "%00"
+      - "%2e"
+
+    # ==========================================================
+    # WAF Options（仅对有 Body 的请求生效：POST/PUT/PATCH）
+    # ==========================================================
+    # 说明：
+    # - 路径变形使用上面的 suffix/prefix/boundary_insert 规则
+    # - 下面的 options 是针对请求体的编码转换
+    # - 勾选越多，生成的变体请求越多
+    # ==========================================================
+    options:
+      # Body 字符集转换（WAF 无法解析，Tomcat 等服务器能解析）
+      body_charset:
+        utf_16: true
+        utf_16be: true
+        utf_16le: true
+        utf_32: true
+        utf_32be: true
+        utf_32le: true
+        ibm037: true         # EBCDIC 编码
+
+      # Body 压缩/变换
+      body_transform:
+        gzip: true           # Gzip 压缩请求体
+
+      # Content-Type 欺骗（让 WAF 误判 body 格式）
+      content_type_spoof:
+        form_urlencoded: true
+        multipart: true
+        text_plain: true

@@ -1,8 +1,12 @@
 package Main;
 
 
-//form @pmiaowu HostCollision
+/**
+ * 响应相似度计算（基于 @pmiaowu HostCollision）
+ */
 public class DiffPage {
+    private static final int MAX_COMPARE_LEN = 8000;
+
     /**
      * 返回经过过滤无用的数据以后两个字符串的相似度
      *
@@ -11,9 +15,13 @@ public class DiffPage {
      * @return
      */
     public static double getRatio(String str, String target) {
-        str = getFilteredPageContent(str);
-        target = getFilteredPageContent(target);
-        return getSimilarityRatio(str, target);
+        return getRatio(str, target, null);
+    }
+
+    public static double getRatio(String str, String target, String contentType) {
+        str = normalizeForCompare(str, contentType);
+        target = normalizeForCompare(target, contentType);
+        return similarity(str, target);
     }
 
     /**
@@ -44,7 +52,7 @@ public class DiffPage {
         // 定义一些特殊字符的正则表达式 如：&#xe625;
         String specialRegex2 = "\\&#[a-zA-Z0-9]{1,10};";
         //定义空格,回车,换行符,制表符
-        String spaceRegex = "\\s*|\t|\r|\n";
+        String spaceRegex = "\\s+";
 
         // 过滤script标签
         htmlStr = htmlStr.replaceAll(scriptRegex, "");
@@ -59,6 +67,151 @@ public class DiffPage {
         htmlStr = htmlStr.replaceAll(spaceRegex, "");
 
         return htmlStr.trim();
+    }
+
+    private static String normalizeForCompare(String body, String contentType) {
+        if (body == null) {
+            return "";
+        }
+
+        String ct = contentType == null ? "" : contentType.toLowerCase();
+        String s = body;
+
+        if (looksLikeJson(ct, s)) {
+            s = normalizeJsonText(s);
+        } else if (looksLikeHtml(ct, s)) {
+            s = normalizeHtmlStructure(s);
+        } else {
+            s = normalizePlainText(s);
+        }
+
+        s = normalizeDynamicTokens(s);
+        if (s.length() > MAX_COMPARE_LEN) {
+            s = s.substring(0, MAX_COMPARE_LEN);
+        }
+        return s;
+    }
+
+    private static boolean looksLikeJson(String contentType, String body) {
+        if (contentType.contains("json")) {
+            return true;
+        }
+        String t = body.trim();
+        return t.startsWith("{") || t.startsWith("[");
+    }
+
+    private static boolean looksLikeHtml(String contentType, String body) {
+        if (contentType.contains("html")) {
+            return true;
+        }
+        String t = body.trim().toLowerCase();
+        return t.startsWith("<!doctype") || t.startsWith("<html") || t.contains("<body") || t.contains("<head");
+    }
+
+    private static String normalizeHtmlStructure(String htmlStr) {
+        if (htmlStr == null) {
+            return "";
+        }
+
+        // 先做基础过滤（脚本/样式/注释），保留标签结构（不移除所有标签）
+        String s = htmlStr;
+        s = s.replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&nbsp;", " ")
+                .replace("&amp;", "&");
+
+        s = s.replaceAll("(?is)<!--.*?-->", "");
+        s = s.replaceAll("(?is)<script[^>]*?>[\\s\\S]*?<\\/script>", "");
+        s = s.replaceAll("(?is)<style[^>]*?>[\\s\\S]*?<\\/style>", "");
+
+        // 抹平属性：<div class="a" id=1> -> <div>
+        s = s.replaceAll("(?is)<\\s*([a-z0-9]+)(?:\\s[^>]*)?>", "<$1>");
+        s = s.replaceAll("(?is)<\\s*/\\s*([a-z0-9]+)\\s*>", "</$1>");
+
+        // 去特殊实体与空白
+        s = s.replaceAll("\\&[a-zA-Z]{1,10};", "");
+        s = s.replaceAll("\\&#[a-zA-Z0-9]{1,10};", "");
+        s = s.replaceAll("\\s+", "");
+        return s.trim();
+    }
+
+    private static String normalizeJsonText(String json) {
+        if (json == null) {
+            return "";
+        }
+        // 不引入额外依赖：先做稳定化（去空白 + 通用动态替换在后续统一做）
+        String s = json.trim();
+        s = s.replaceAll("\\s+", "");
+        return s;
+    }
+
+    private static String normalizePlainText(String text) {
+        if (text == null) {
+            return "";
+        }
+        String s = text;
+        s = s.replaceAll("\\s+", "");
+        return s.trim();
+    }
+
+    private static String normalizeDynamicTokens(String s) {
+        if (s == null || s.isEmpty()) {
+            return "";
+        }
+
+        String r = s;
+        // UUID
+        r = r.replaceAll("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "{UUID}");
+        // 13位/10位时间戳等长数字（避免把短数字如分页 size=10 误杀）
+        r = r.replaceAll("\\b\\d{10,19}\\b", "{NUM}");
+        // 长 hex
+        r = r.replaceAll("(?i)\\b[0-9a-f]{16,}\\b", "{HEX}");
+        // base64-like 长串
+        r = r.replaceAll("\\b[A-Za-z0-9+/=_-]{24,}\\b", "{TOKEN}");
+        return r;
+    }
+
+    private static double similarity(String a, String b) {
+        if (a.equals(b)) {
+            return 1;
+        }
+        if (a.isEmpty() || b.isEmpty()) {
+            return 0;
+        }
+
+        int maxLen = Math.max(a.length(), b.length());
+        if (maxLen > 2000) {
+            return jaccardNGram(a, b, 5);
+        }
+        return getSimilarityRatio(a, b);
+    }
+
+    private static double jaccardNGram(String a, String b, int n) {
+        if (a.length() < n || b.length() < n) {
+            return a.equals(b) ? 1 : 0;
+        }
+        java.util.HashSet<Integer> sa = new java.util.HashSet<>();
+        java.util.HashSet<Integer> sb = new java.util.HashSet<>();
+        int limitA = Math.min(a.length() - n + 1, 4000);
+        int limitB = Math.min(b.length() - n + 1, 4000);
+        for (int i = 0; i < limitA; i++) {
+            sa.add(a.substring(i, i + n).hashCode());
+        }
+        for (int i = 0; i < limitB; i++) {
+            sb.add(b.substring(i, i + n).hashCode());
+        }
+        if (sa.isEmpty() && sb.isEmpty()) {
+            return 1;
+        }
+        int inter = 0;
+        for (Integer x : sa) {
+            if (sb.contains(x)) {
+                inter++;
+            }
+        }
+        int union = sa.size() + sb.size() - inter;
+        return union == 0 ? 1 : (double) inter / union;
     }
 
     /**

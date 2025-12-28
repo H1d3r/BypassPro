@@ -57,27 +57,37 @@ public class BypassTable extends JTable implements IMessageEditorController {
 
     public byte[] getRequest() {
 
+        if (currentlyDisplayedItem == null || currentlyDisplayedItem.getRequest() == null) {
+            return new byte[0];
+        }
         return currentlyDisplayedItem.getRequest();
     }
 
 
     public byte[] getResponse() {
 
+        if (currentlyDisplayedItem == null || currentlyDisplayedItem.getResponse() == null) {
+            return new byte[0];
+        }
         return currentlyDisplayedItem.getResponse();
     }
 
     public IHttpService getHttpService() {
 
+        if (currentlyDisplayedItem == null) {
+            return null;
+        }
         return currentlyDisplayedItem.getHttpService();
     }
 
     @Override
     public void changeSelection(int row, int col, boolean toggle, boolean extend) {
-        Bypass bypassEntry = bypassTableModel.getBypassArray().get(convertRowIndexToModel(row));
-        requestViewer.setMessage(bypassEntry.requestResponse.getRequest(), true);
-        responseViewer.setMessage(bypassEntry.requestResponse.getResponse(), false);
-        currentlyDisplayedItem = bypassEntry.requestResponse;
-
+        Bypass bypassEntry = bypassTableModel.getBypassAt(convertRowIndexToModel(row));
+        if (bypassEntry != null) {
+            requestViewer.setMessage(bypassEntry.requestResponse.getRequest(), true);
+            responseViewer.setMessage(bypassEntry.requestResponse.getResponse(), false);
+            currentlyDisplayedItem = bypassEntry.requestResponse;
+        }
         super.changeSelection(row, col, toggle, extend);
     }
 

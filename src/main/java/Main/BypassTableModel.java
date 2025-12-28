@@ -30,16 +30,30 @@ import java.util.List;
 
 public class BypassTableModel extends AbstractTableModel {
 
-    private final List<Bypass> bypassArray = new ArrayList();
+    private final List<Bypass> bypassArray = new ArrayList<>();
+    private final Object lock = new Object();
 
+    public void addBypass(Bypass b) {
+        synchronized (lock) {
+            bypassArray.add(b);
+        }
+        javax.swing.SwingUtilities.invokeLater(this::fireTableDataChanged);
+    }
+
+    public void clearAll() {
+        synchronized (lock) {
+            bypassArray.clear();
+        }
+        javax.swing.SwingUtilities.invokeLater(this::fireTableDataChanged);
+    }
 
     public int getRowCount() {
-
-        return bypassArray.size();
+        synchronized (lock) {
+            return bypassArray.size();
+        }
     }
 
     public int getColumnCount() {
-
         return 9;
     }
 
@@ -98,13 +112,16 @@ public class BypassTableModel extends AbstractTableModel {
     }
 
     public Object getValueAt(int rowIndex, int columnIndex) {
-
-        Bypass bypassEntry = bypassArray.get(rowIndex);
-
+        Bypass bypassEntry;
+        synchronized (lock) {
+            if (rowIndex < 0 || rowIndex >= bypassArray.size()) {
+                return "";
+            }
+            bypassEntry = bypassArray.get(rowIndex);
+        }
         switch (columnIndex) {
             case 0:
                 return bypassEntry.id;
-
             case 1:
                 return bypassEntry.tool;
             case 2:
@@ -126,8 +143,17 @@ public class BypassTableModel extends AbstractTableModel {
         }
     }
 
-    public List<Bypass> getBypassArray() {
+    public Bypass getBypassAt(int index) {
+        synchronized (lock) {
+            if (index < 0 || index >= bypassArray.size()) {
+                return null;
+            }
+            return bypassArray.get(index);
+        }
+    }
 
+    @Deprecated
+    public List<Bypass> getBypassArray() {
         return bypassArray;
     }
 
