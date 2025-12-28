@@ -14,7 +14,7 @@
 
 此项目是基于p0desta师傅的项目[https://github.com/p0desta/AutoBypass403-BurpSuite](https://github.com/p0desta/AutoBypass403-BurpSuite)进行二开的。用于权限绕过，403bypass等的自动化bypass的Burpsuite插件。感谢p0desta师傅的开源，本二开项目已经过p0desta师傅本人允许开源。
 
-### 当前版本更新
+### 当前版本BypassPro 4.0 更新
 
 #### 新增功能
 
@@ -183,6 +183,7 @@
 - Auto Scan 会对命中条件的 Proxy 响应自动发起一批变体请求，目标站点存在 WAF/频率限制时建议关闭 Auto Scan，仅使用手动扫描。
 
 ### 案例
+### 案例 1
 之前很多案例没有记录。这次bypasspro又发现了一个
 
 最近的JumpServer未授权访问漏洞(CVE-2023-42442)：未经身份验证的远程攻击者利用该漏洞可以访问录像文件，远程获取到敏感信息。
@@ -198,6 +199,13 @@
 ok BypassPro给出 bypass 的payload：/api/v1/terminal/sessions.json?limit=1
 
 ![image](https://github.com/0x727/BypassPro/assets/49912303/361abfdd-58c3-4465-962b-6f747dc1d355)
+
+####案例 2
+
+<img width="505" height="162" alt="image" src="https://github.com/user-attachments/assets/64aa6617-dc34-4222-9ba7-7c717cb3df79" />
+
+emmm这个时候还是老版本，
+<img width="1433" height="730" alt="image" src="https://github.com/user-attachments/assets/b069b278-745f-4c38-bf0c-5d5627136b77" />
 
 
 
