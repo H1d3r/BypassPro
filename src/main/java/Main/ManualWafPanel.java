@@ -192,7 +192,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void setupShortcuts() {
-        if (requestViewer == null) return;
+        if (requestViewer == null)
+            return;
         Component editorComponent = requestViewer.getComponent();
         addCtrlEnterListener(editorComponent);
     }
@@ -242,36 +243,31 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 createBtn("Base64", this::base64Encode),
                 createBtn("Base64 Dec", this::base64Decode),
                 createBtn("Hex", this::hexEncode),
-                createBtn("\\uXXXX", this::toUnicodeEscape)
-        ));
+                createBtn("\\uXXXX", this::toUnicodeEscape)));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Case", "选中文本后大小写转换",
                 createBtn("UPPER", this::toUpper),
                 createBtn("lower", this::toLower),
-                createBtn("RaNdOm", this::toRandomCase)
-        ));
+                createBtn("RaNdOm", this::toRandomCase)));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Unicode", "选中文本后 Unicode 变形",
                 createBtn("Fullwidth", this::toFullwidth),
-                createBtn("Homoglyph", this::toHomoglyph)
-        ));
+                createBtn("Homoglyph", this::toHomoglyph)));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("SQL Bypass", "选中 SQL 关键字后变形",
                 createBtn("/**/包裹", this::sqlCommentWrap),
                 createBtn("/*!50000*/", this::mysqlVersionComment),
-                createBtn("Null分割", this::nullByteSplit)
-        ));
+                createBtn("Null分割", this::nullByteSplit)));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Path", "路径遍历变形",
                 createBtn("....//", () -> transformSelection(s -> s.replace("../", "....//"))),
                 createBtn("..%252f", () -> transformSelection(s -> s.replace("../", "..%252f"))),
                 createBtn("..%c0%af", () -> transformSelection(s -> s.replace("../", "..%c0%af"))),
-                createBtn("..\\\\", () -> transformSelection(s -> s.replace("../", "..\\\\")))
-        ));
+                createBtn("..\\\\", () -> transformSelection(s -> s.replace("../", "..\\\\")))));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Insert", "在选中文本之前插入字符",
@@ -279,14 +275,12 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 createBtn("%0a", () -> insertAt("%0a")),
                 createBtn("%0d", () -> insertAt("%0d")),
                 createBtn("%00", () -> insertAt("%00")),
-                createBtn("/**/", () -> wrapWith("/**/", ""))
-        ));
+                createBtn("/**/", () -> wrapWith("/**/", ""))));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Dirty Data", "插入占位符（发送时展开）",
                 createBtn("Dirty(N)", this::insertDirtyData),
-                createBtn("Null(N)", this::insertNullBytes)
-        ));
+                createBtn("Null(N)", this::insertNullBytes)));
 
         inner.add(Box.createVerticalStrut(8));
         inner.add(createBlock("Request", "对整个请求 Body 变换",
@@ -299,8 +293,7 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 createBtn("UTF-32LE", () -> encodeBodyWithCharset("UTF-32LE")),
                 createBtn("IBM037", () -> encodeBodyWithCharset("IBM037")),
                 createBtn("cp290", () -> encodeBodyWithCharset("cp290")),
-                createBtn("HTTP/1.0", this::switchToHttp10)
-        ));
+                createBtn("HTTP/1.0", this::switchToHttp10)));
 
         inner.add(Box.createVerticalGlue());
 
@@ -317,8 +310,7 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         block.setLayout(new BoxLayout(block, BoxLayout.Y_AXIS));
         block.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createTitledBorder(title),
-                new EmptyBorder(2, 5, 5, 5)
-        ));
+                new EmptyBorder(2, 5, 5, 5)));
         block.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel descLabel = new JLabel(desc);
@@ -330,7 +322,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 3));
         btnPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        for (JButton btn : buttons) btnPanel.add(btn);
+        for (JButton btn : buttons)
+            btnPanel.add(btn);
         block.add(btnPanel);
 
         return block;
@@ -395,9 +388,11 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void showHistoryPopup(java.awt.event.MouseEvent evt) {
-        if (!evt.isPopupTrigger()) return;
+        if (!evt.isPopupTrigger())
+            return;
         int row = historyTable.rowAtPoint(evt.getPoint());
-        if (row < 0) return;
+        if (row < 0)
+            return;
         historyTable.setRowSelectionInterval(row, row);
         int modelRow = historyTable.convertRowIndexToModel(row);
 
@@ -419,7 +414,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void loadHistoryRequest(int index) {
-        if (index < 0 || index >= historyEntries.size()) return;
+        if (index < 0 || index >= historyEntries.size())
+            return;
         HistoryEntry entry = historyEntries.get(index);
         if (entry.requestBytes != null && entry.requestBytes.length > 0) {
             saveState();
@@ -509,15 +505,18 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < s.length(); i++) {
                 sb.append(s.charAt(i));
-                if (i < s.length() - 1) sb.append("%00");
+                if (i < s.length() - 1)
+                    sb.append("%00");
             }
             return sb.toString();
         });
     }
 
     private void insertDirtyData() {
-        String input = JOptionPane.showInputDialog(this, "输入脏数据长度（数字字符数量）:", "Dirty Data", JOptionPane.QUESTION_MESSAGE);
-        if (input == null || input.trim().isEmpty()) return;
+        String input = JOptionPane.showInputDialog(this, "输入脏数据长度（数字字符数量）:", "Dirty Data",
+                JOptionPane.QUESTION_MESSAGE);
+        if (input == null || input.trim().isEmpty())
+            return;
         try {
             int count = Integer.parseInt(input.trim());
             if (count <= 0) {
@@ -532,7 +531,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
     private void insertNullBytes() {
         String input = JOptionPane.showInputDialog(this, "输入 Null 字节数量:", "Null Bytes", JOptionPane.QUESTION_MESSAGE);
-        if (input == null || input.trim().isEmpty()) return;
+        if (input == null || input.trim().isEmpty())
+            return;
         try {
             int count = Integer.parseInt(input.trim());
             if (count <= 0) {
@@ -561,7 +561,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             lineEnd = "\n";
             sepLen = 2;
         }
-        if (bodyStart < 0) return null;
+        if (bodyStart < 0)
+            return null;
         parts.lineEnd = lineEnd;
         parts.headers = requestText.substring(0, bodyStart);
         parts.body = requestText.substring(bodyStart + sepLen);
@@ -575,7 +576,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             if (line.toLowerCase().startsWith(headerName.toLowerCase() + ":")) {
                 continue;
             }
-            if (sb.length() > 0) sb.append(lineEnd);
+            if (sb.length() > 0)
+                sb.append(lineEnd);
             sb.append(line);
         }
         return sb.toString();
@@ -588,24 +590,28 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         for (String line : lines) {
             if (line.toLowerCase().startsWith(headerName.toLowerCase() + ":")) {
                 if (!found) {
-                    if (sb.length() > 0) sb.append(lineEnd);
+                    if (sb.length() > 0)
+                        sb.append(lineEnd);
                     sb.append(headerName).append(": ").append(headerValue);
                     found = true;
                 }
                 continue;
             }
-            if (sb.length() > 0) sb.append(lineEnd);
+            if (sb.length() > 0)
+                sb.append(lineEnd);
             sb.append(line);
         }
         if (!found) {
-            if (sb.length() > 0) sb.append(lineEnd);
+            if (sb.length() > 0)
+                sb.append(lineEnd);
             sb.append(headerName).append(": ").append(headerValue);
         }
         return sb.toString();
     }
 
     private boolean hasHeaderContains(String headers, String headerName, String needle) {
-        if (headers == null) return false;
+        if (headers == null)
+            return false;
         String[] lines = headers.split("\\r?\\n", -1);
         for (String line : lines) {
             if (line.toLowerCase().startsWith(headerName.toLowerCase() + ":")) {
@@ -616,13 +622,16 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private boolean looksBinaryBody(String body) {
-        if (body == null || body.isEmpty()) return false;
+        if (body == null || body.isEmpty())
+            return false;
         int sampleLen = Math.min(body.length(), 4096);
         int suspicious = 0;
         for (int i = 0; i < sampleLen; i++) {
             char c = body.charAt(i);
-            if (c == '\r' || c == '\n' || c == '\t') continue;
-            if (c < 0x20 || (c >= 0x7F && c <= 0x9F)) suspicious++;
+            if (c == '\r' || c == '\n' || c == '\t')
+                continue;
+            if (c < 0x20 || (c >= 0x7F && c <= 0x9F))
+                suspicious++;
         }
         return suspicious > (sampleLen * 0.10);
     }
@@ -648,20 +657,21 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             for (String h : headers) {
                 String hl = h.toLowerCase();
                 if (hl.startsWith("content-encoding:") && hl.contains("gzip")) {
-                    JOptionPane.showMessageDialog(this, "Header 显示已是 Gzip 格式，取消操作。", "提示", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Header 显示已是 Gzip 格式，取消操作。", "提示",
+                            JOptionPane.INFORMATION_MESSAGE);
                     return;
                 }
             }
 
             // 2) Magic bytes 检查：1F 8B
-            if (body.length >= 2 && body[0] == (byte) 0x1F && body[1] == (byte) 0x8B) {
+            if (body.length >= 2 && (body[0] & 0xFF) == 0x1F && (body[1] & 0xFF) == 0x8B) {
                 int ret = JOptionPane.showConfirmDialog(
                         this,
                         "检测到 Body 似乎已经是 Gzip 格式 (Magic Bytes 1F 8B)。\n是否继续强制压缩？(可能导致双重压缩)",
                         "警告",
-                        JOptionPane.YES_NO_OPTION
-                );
-                if (ret != JOptionPane.YES_OPTION) return;
+                        JOptionPane.YES_NO_OPTION);
+                if (ret != JOptionPane.YES_OPTION)
+                    return;
             }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -740,9 +750,9 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                                 "只能进行 Header 欺骗（修改 Content-Type 头但保留原始 Body）。\n\n" +
                                 "是否继续？",
                         "Header 欺骗",
-                        JOptionPane.YES_NO_OPTION
-                );
-                if (ret != JOptionPane.YES_OPTION) return;
+                        JOptionPane.YES_NO_OPTION);
+                if (ret != JOptionPane.YES_OPTION)
+                    return;
 
                 removeHeaderIgnoreCase(headers, "Content-Type");
                 headers.add("Content-Type: multipart/form-data; boundary=" + boundary);
@@ -764,7 +774,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             Charset cs = StandardCharsets.UTF_8;
             for (String h : headers) {
                 if (h.toLowerCase().startsWith("content-type:")) {
-                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)charset\\s*=\\s*([^;\\r\\n]+)").matcher(h);
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)charset\\s*=\\s*([^;\\r\\n]+)")
+                            .matcher(h);
                     if (m.find()) {
                         try {
                             cs = Charset.forName(m.group(1).trim());
@@ -776,19 +787,23 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             }
 
             String bodyStr = new String(body, cs);
-            if (bodyStr.trim().isEmpty()) return null;
+            if (bodyStr.trim().isEmpty())
+                return null;
 
             String[] pairs = bodyStr.split("&");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             for (String pair : pairs) {
-                if (pair == null || pair.isEmpty()) continue;
+                if (pair == null || pair.isEmpty())
+                    continue;
                 String[] kv = pair.split("=", 2);
                 String key = URLDecoder.decode(kv[0], cs.name());
                 String value = kv.length > 1 ? URLDecoder.decode(kv[1], cs.name()) : "";
 
                 out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
-                out.write(("Content-Disposition: form-data; name=\"" + key + "\"\r\n").getBytes(StandardCharsets.UTF_8));
-                out.write(("Content-Type: text/plain; charset=" + cs.name() + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
+                out.write(
+                        ("Content-Disposition: form-data; name=\"" + key + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+                out.write(("Content-Type: text/plain; charset=" + cs.name() + "\r\n")
+                        .getBytes(StandardCharsets.ISO_8859_1));
                 out.write(("\r\n").getBytes(StandardCharsets.ISO_8859_1));
                 out.write(value.getBytes(cs));
                 out.write(("\r\n").getBytes(StandardCharsets.ISO_8859_1));
@@ -817,7 +832,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 return;
             }
             if (looksBinaryBody(body)) {
-                JOptionPane.showMessageDialog(this, "当前请求体看起来已是二进制/已编码数据，请先 Reset 再进行字符集编码", "提示", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this, "当前请求体看起来已是二进制/已编码数据，请先 Reset 再进行字符集编码", "提示",
+                        JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
 
@@ -833,11 +849,13 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     if (!ctDone && line.toLowerCase().startsWith("content-type:")) {
                         String normalized = line.replaceAll("(?i);\\s*charset=[^;\\r\\n]*", "");
                         normalized = normalized + "; charset=" + charsetName;
-                        if (sb.length() > 0) sb.append(lineEnd);
+                        if (sb.length() > 0)
+                            sb.append(lineEnd);
                         sb.append(normalized);
                         ctDone = true;
                     } else {
-                        if (sb.length() > 0) sb.append(lineEnd);
+                        if (sb.length() > 0)
+                            sb.append(lineEnd);
                         sb.append(line);
                     }
                 }
@@ -853,8 +871,13 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         }
     }
 
-    private void toUpper() { transformSelection(String::toUpperCase); }
-    private void toLower() { transformSelection(String::toLowerCase); }
+    private void toUpper() {
+        transformSelection(String::toUpperCase);
+    }
+
+    private void toLower() {
+        transformSelection(String::toLowerCase);
+    }
 
     private void toRandomCase() {
         transformSelection(s -> {
@@ -870,9 +893,12 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         transformSelection(s -> {
             StringBuilder sb = new StringBuilder();
             for (char c : s.toCharArray()) {
-                if (c >= '!' && c <= '~') sb.append((char) (c - '!' + '！'));
-                else if (c == ' ') sb.append('　');
-                else sb.append(c);
+                if (c >= '!' && c <= '~')
+                    sb.append((char) (c - '!' + '！'));
+                else if (c == ' ')
+                    sb.append('　');
+                else
+                    sb.append(c);
             }
             return sb.toString();
         });
@@ -904,7 +930,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
     private void switchToHttp10() {
         byte[] request = getRequestBytes();
-        if (request == null || request.length == 0) return;
+        if (request == null || request.length == 0)
+            return;
 
         IRequestInfo info = Utils.helpers.analyzeRequest(request);
         List<String> headers = new ArrayList<>(info.getHeaders());
@@ -954,7 +981,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     // --- Undo/Redo ---
     private void saveState() {
         byte[] current = getRequestBytes();
-        if (lastSavedState != null && Arrays.equals(current, lastSavedState)) return;
+        if (lastSavedState != null && Arrays.equals(current, lastSavedState))
+            return;
 
         undoStack.push(lastSavedState == null ? new byte[0] : lastSavedState);
         if (undoStack.size() > MAX_UNDO_STEPS) {
@@ -1050,15 +1078,18 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 // 发送请求（可能跟随重定向）
                 while (!isCancelled && redirectCount <= MAX_REDIRECTS) {
                     resp = Utils.callbacks.makeHttpRequest(currentTarget, finalBytes);
-                    if (isCancelled) break;
+                    if (isCancelled)
+                        break;
 
                     respBytes = (resp == null) ? null : resp.getResponse();
-                    if (respBytes == null) break;
+                    if (respBytes == null)
+                        break;
 
                     // 检查是否需要跟随重定向
                     if (followRedirect) {
                         short statusCode = Utils.helpers.analyzeResponse(respBytes).getStatusCode();
-                        if (statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308) {
+                        if (statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307
+                                || statusCode == 308) {
                             String location = getHeaderValue(respBytes, "Location");
                             if (location != null && !location.isEmpty()) {
                                 try {
@@ -1069,8 +1100,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                                     } else {
                                         // 相对路径
                                         String base = currentTarget.getProtocol() + "://" + currentTarget.getHost();
-                                        if ((currentTarget.getProtocol().equals("http") && currentTarget.getPort() != 80) ||
-                                                (currentTarget.getProtocol().equals("https") && currentTarget.getPort() != 443)) {
+                                        if ((currentTarget.getProtocol().equals("http")
+                                                && currentTarget.getPort() != 80) ||
+                                                (currentTarget.getProtocol().equals("https")
+                                                        && currentTarget.getPort() != 443)) {
                                             base += ":" + currentTarget.getPort();
                                         }
                                         if (!location.startsWith("/")) {
@@ -1087,7 +1120,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                                         newPort = "https".equals(newProtocol) ? 443 : 80;
                                     }
                                     String newPath = redirectUrl.getPath();
-                                    if (newPath == null || newPath.isEmpty()) newPath = "/";
+                                    if (newPath == null || newPath.isEmpty())
+                                        newPath = "/";
                                     if (redirectUrl.getQuery() != null) {
                                         newPath += "?" + redirectUrl.getQuery();
                                     }
@@ -1095,23 +1129,28 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                                     currentTarget = Utils.helpers.buildHttpService(newHost, newPort, newProtocol);
 
                                     // 303 强制 GET，其他保持方法
-                                    String method = (statusCode == 303) ? "GET" : Utils.helpers.analyzeRequest(finalBytes).getMethod();
+                                    String method = (statusCode == 303) ? "GET"
+                                            : Utils.helpers.analyzeRequest(finalBytes).getMethod();
                                     List<String> newHeaders = new ArrayList<>();
                                     newHeaders.add(method + " " + newPath + " HTTP/1.1");
-                                    newHeaders.add("Host: " + newHost + (newPort != 80 && newPort != 443 ? ":" + newPort : ""));
+                                    newHeaders.add("Host: " + newHost
+                                            + (newPort != 80 && newPort != 443 ? ":" + newPort : ""));
 
                                     // 复制原有 headers（除了 Host）
                                     List<String> oldHeaders = Utils.helpers.analyzeRequest(finalBytes).getHeaders();
                                     for (int i = 1; i < oldHeaders.size(); i++) {
                                         String h = oldHeaders.get(i);
-                                        if (!h.toLowerCase().startsWith("host:") && !h.toLowerCase().startsWith("content-length:")) {
+                                        if (!h.toLowerCase().startsWith("host:")
+                                                && !h.toLowerCase().startsWith("content-length:")) {
                                             newHeaders.add(h);
                                         }
                                     }
 
                                     // 303 不带 body
-                                    byte[] body = (statusCode == 303) ? new byte[0] :
-                                            Arrays.copyOfRange(finalBytes, Utils.helpers.analyzeRequest(finalBytes).getBodyOffset(), finalBytes.length);
+                                    byte[] body = (statusCode == 303) ? new byte[0]
+                                            : Arrays.copyOfRange(finalBytes,
+                                                    Utils.helpers.analyzeRequest(finalBytes).getBodyOffset(),
+                                                    finalBytes.length);
 
                                     finalBytes = Utils.helpers.buildHttpMessage(newHeaders, body);
                                     redirectCount++;
@@ -1125,7 +1164,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     break; // 不是重定向或不跟随，退出循环
                 }
 
-                if (isCancelled) return;
+                if (isCancelled)
+                    return;
 
                 final byte[] finalRespBytes = respBytes;
                 final byte[] finalReqBytes = finalBytes;
@@ -1184,20 +1224,19 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                                     durationMs,
                                     formatSize(finalReqBytes.length),
                                     formatSize(finalRespBytes.length),
-                                    finalRedirectCount > 0 ? " | Redirects: " + finalRedirectCount : ""
-                            );
+                                    finalRedirectCount > 0 ? " | Redirects: " + finalRedirectCount : "");
                         } else {
                             statusText = String.format(
                                     "Status: (none) | Time: %dms | Req: %s | Resp: 0B",
                                     durationMs,
-                                    formatSize(finalReqBytes.length)
-                            );
+                                    formatSize(finalReqBytes.length));
                         }
                         statusLabel.setText(statusText);
                     }
                 });
             } catch (Exception ex) {
-                if (isCancelled) return;
+                if (isCancelled)
+                    return;
                 long durationMs = (System.nanoTime() - startNs) / 1_000_000L;
                 SwingUtilities.invokeLater(() -> {
                     responseViewer.setMessage(("Error: " + ex.getMessage()).getBytes(StandardCharsets.UTF_8), false);
@@ -1222,7 +1261,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private String getHeaderValue(byte[] response, String headerName) {
-        if (response == null) return null;
+        if (response == null)
+            return null;
         try {
             IResponseInfo info = Utils.helpers.analyzeResponse(response);
             for (String h : info.getHeaders()) {
@@ -1236,8 +1276,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private String formatSize(int size) {
-        if (size < 1024) return size + "B";
-        if (size < 1024 * 1024) return String.format("%.1fKB", size / 1024.0);
+        if (size < 1024)
+            return size + "B";
+        if (size < 1024 * 1024)
+            return String.format("%.1fKB", size / 1024.0);
         return String.format("%.1fMB", size / 1024.0 / 1024.0);
     }
 
@@ -1252,7 +1294,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     private void addToDataboard(IHttpRequestResponse response) {
         try {
             byte[] respBytes = response.getResponse();
-            if (respBytes == null) return;
+            if (respBytes == null)
+                return;
             short statusCode = Utils.helpers.analyzeResponse(respBytes).getStatusCode();
             String title = Utils.getBodyTitle(new String(respBytes, StandardCharsets.UTF_8));
             Utils.panel.getBypassTableModel().addBypass(new Bypass(
@@ -1265,28 +1308,33 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     Utils.helpers.analyzeResponse(respBytes).getStatedMimeType(),
                     title,
                     Utils.count++,
-                    "WAF Bypass (Manual)"
-            ));
+                    "WAF Bypass (Manual)"));
         } catch (Exception ignored) {
         }
     }
 
     private void showHistoryEntry(int index) {
-        if (index < 0 || index >= historyEntries.size()) return;
+        if (index < 0 || index >= historyEntries.size())
+            return;
         byte[] resp = historyEntries.get(index).responseBytes;
-        if (resp == null) resp = new byte[0];
+        if (resp == null)
+            resp = new byte[0];
         currentResponseBytes = resp;
         responseViewer.setMessage(resp, false);
     }
 
     // --- Public API ---
     public void loadRequest(IHttpRequestResponse requestResponse) {
-        if (requestResponse == null) return;
+        if (requestResponse == null)
+            return;
         currentHttpService = requestResponse.getHttpService();
         if (currentHttpService != null) {
-            if (hostField != null) hostField.setText(currentHttpService.getHost());
-            if (portField != null) portField.setText(String.valueOf(currentHttpService.getPort()));
-            if (httpsCheckBox != null) httpsCheckBox.setSelected("https".equalsIgnoreCase(currentHttpService.getProtocol()));
+            if (hostField != null)
+                hostField.setText(currentHttpService.getHost());
+            if (portField != null)
+                portField.setText(String.valueOf(currentHttpService.getPort()));
+            if (httpsCheckBox != null)
+                httpsCheckBox.setSelected("https".equalsIgnoreCase(currentHttpService.getProtocol()));
         }
 
         byte[] req = requestResponse.getRequest();
@@ -1331,8 +1379,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void setRequestBytes(byte[] msg) {
-        if (msg == null) msg = new byte[0];
-        if (requestViewer != null) requestViewer.setMessage(msg, true);
+        if (msg == null)
+            msg = new byte[0];
+        if (requestViewer != null)
+            requestViewer.setMessage(msg, true);
     }
 
     private String getRequestTextISO() {
@@ -1340,12 +1390,14 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void setRequestTextISO(String text) {
-        if (text == null) text = "";
+        if (text == null)
+            text = "";
         setRequestBytes(text.getBytes(StandardCharsets.ISO_8859_1));
     }
 
     private byte[] getSelectedRequestBytes() {
-        if (requestViewer == null) return new byte[0];
+        if (requestViewer == null)
+            return new byte[0];
         byte[] sel = requestViewer.getSelectedData();
         return sel == null ? new byte[0] : sel;
     }
@@ -1380,10 +1432,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 JOptionPane.QUESTION_MESSAGE,
                 null,
                 options,
-                options[0]
-        );
+                options[0]);
 
-        if (choice == null) return;
+        if (choice == null)
+            return;
 
         String choiceStr = choice.toString();
         if (choiceStr.startsWith("全部替换")) {
@@ -1414,7 +1466,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
             byte[] out = new byte[current.length - targetLen + replacement.length];
             System.arraycopy(current, 0, out, 0, pos);
             System.arraycopy(replacement, 0, out, pos, replacement.length);
-            System.arraycopy(current, pos + targetLen, out, pos + replacement.length, current.length - (pos + targetLen));
+            System.arraycopy(current, pos + targetLen, out, pos + replacement.length,
+                    current.length - (pos + targetLen));
             current = out;
         }
         setRequestBytes(current);
@@ -1428,7 +1481,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         int idx = 0;
         while (idx <= haystack.length - needle.length) {
             int found = indexOfFrom(haystack, needle, idx);
-            if (found < 0) break;
+            if (found < 0)
+                break;
             result.add(found);
             idx = found + needle.length; // 不允许重叠匹配
         }
@@ -1436,11 +1490,12 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private static int indexOfFrom(byte[] haystack, byte[] needle, int fromIndex) {
-        if (haystack == null || needle == null || needle.length == 0) return -1;
-        outer:
-        for (int i = fromIndex; i <= haystack.length - needle.length; i++) {
+        if (haystack == null || needle == null || needle.length == 0)
+            return -1;
+        outer: for (int i = fromIndex; i <= haystack.length - needle.length; i++) {
             for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) continue outer;
+                if (haystack[i + j] != needle[j])
+                    continue outer;
             }
             return i;
         }
@@ -1452,7 +1507,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         int end = Math.min(msg.length, pos + targetLen + contextLen);
 
         StringBuilder sb = new StringBuilder();
-        if (start > 0) sb.append("");
+        if (start > 0)
+            sb.append("");
         for (int i = start; i < pos; i++) {
             sb.append(safeChar(msg[i]));
         }
@@ -1464,16 +1520,21 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
         for (int i = pos + targetLen; i < end; i++) {
             sb.append(safeChar(msg[i]));
         }
-        if (end < msg.length) sb.append("");
+        if (end < msg.length)
+            sb.append("");
         return sb.toString();
     }
 
     private char safeChar(byte b) {
         int c = b & 0xFF;
-        if (c == '\r') return '↵';
-        if (c == '\n') return '↓';
-        if (c == '\t') return '→';
-        if (c < 0x20 || c >= 0x7F) return '·';
+        if (c == '\r')
+            return '↵';
+        if (c == '\n')
+            return '↓';
+        if (c == '\t')
+            return '→';
+        if (c < 0x20 || c >= 0x7F)
+            return '·';
         return (char) c;
     }
 
@@ -1510,10 +1571,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     JOptionPane.QUESTION_MESSAGE,
                     null,
                     options,
-                    options[0]
-            );
+                    options[0]);
 
-            if (choice == null) return;
+            if (choice == null)
+                return;
 
             chosenIdx = -1;
             String choiceStr = choice.toString();
@@ -1523,7 +1584,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     break;
                 }
             }
-            if (chosenIdx < 0) return;
+            if (chosenIdx < 0)
+                return;
         }
 
         int insertPos = beforeSelection ? chosenIdx : (chosenIdx + sel.length);
@@ -1536,7 +1598,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
     // --- Dirty tags ---
     private byte[] buildRequestBytesForSending(byte[] originalRequestBytes) {
-        if (originalRequestBytes == null) return new byte[0];
+        if (originalRequestBytes == null)
+            return new byte[0];
 
         SplitBytes split = splitRequestBytes(originalRequestBytes);
         if (split == null) {
@@ -1552,7 +1615,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
         String bodyStr = new String(split.bodyBytes, StandardCharsets.ISO_8859_1);
         boolean binary = hasHeaderContains(headersStr, "Content-Encoding", "gzip") || looksBinaryBody(bodyStr);
-        byte[] bodyExpanded = buildBodyBytesWithTags(bodyStr, binary ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
+        byte[] bodyExpanded = buildBodyBytesWithTags(bodyStr,
+                binary ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
 
         if (tamperedCL) {
             // 用户刻意篡改了 Content-Length：保留 Header 不动，只在 body 里展开 dirty/null 占位符
@@ -1580,17 +1644,20 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private boolean hasHeaderName(String headers, String headerName) {
-        if (headers == null) return false;
+        if (headers == null)
+            return false;
         String[] lines = headers.split("\\r?\\n", -1);
         for (String line : lines) {
-            if (line.toLowerCase().startsWith(headerName.toLowerCase() + ":")) return true;
+            if (line.toLowerCase().startsWith(headerName.toLowerCase() + ":"))
+                return true;
         }
         return false;
     }
 
     private boolean isContentLengthTampered(byte[] requestBytes) {
         SplitBytes split = splitRequestBytes(requestBytes);
-        if (split == null) return false;
+        if (split == null)
+            return false;
         String headers = new String(split.headersBytes, StandardCharsets.ISO_8859_1);
         String[] lines = headers.split("\\r?\\n", -1);
         int declared = -1;
@@ -1604,7 +1671,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 break;
             }
         }
-        if (declared < 0) return false; // 没有 CL
+        if (declared < 0)
+            return false; // 没有 CL
         return declared != split.bodyBytes.length;
     }
 
@@ -1634,19 +1702,21 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private SplitBytes splitRequestBytes(byte[] requestBytes) {
-        if (requestBytes == null) return null;
-        int idx = indexOfBytes(requestBytes, new byte[]{'\r', '\n', '\r', '\n'});
+        if (requestBytes == null)
+            return null;
+        int idx = indexOfBytes(requestBytes, new byte[] { '\r', '\n', '\r', '\n' });
         byte[] delimiter;
         String lineEnd;
         int sepLen;
         if (idx >= 0) {
-            delimiter = new byte[]{'\r', '\n', '\r', '\n'};
+            delimiter = new byte[] { '\r', '\n', '\r', '\n' };
             lineEnd = "\r\n";
             sepLen = 4;
         } else {
-            idx = indexOfBytes(requestBytes, new byte[]{'\n', '\n'});
-            if (idx < 0) return null;
-            delimiter = new byte[]{'\n', '\n'};
+            idx = indexOfBytes(requestBytes, new byte[] { '\n', '\n' });
+            if (idx < 0)
+                return null;
+            delimiter = new byte[] { '\n', '\n' };
             lineEnd = "\n";
             sepLen = 2;
         }
@@ -1659,11 +1729,12 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private int indexOfBytes(byte[] haystack, byte[] needle) {
-        if (haystack == null || needle == null || needle.length == 0 || haystack.length < needle.length) return -1;
-        outer:
-        for (int i = 0; i <= haystack.length - needle.length; i++) {
+        if (haystack == null || needle == null || needle.length == 0 || haystack.length < needle.length)
+            return -1;
+        outer: for (int i = 0; i <= haystack.length - needle.length; i++) {
             for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) continue outer;
+                if (haystack[i + j] != needle[j])
+                    continue outer;
             }
             return i;
         }
@@ -1671,7 +1742,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void updateOrAddHeader(List<String> headers, String name, String value) {
-        if (headers == null || headers.isEmpty()) return;
+        if (headers == null || headers.isEmpty())
+            return;
         for (int i = 1; i < headers.size(); i++) {
             String h = headers.get(i);
             if (h.toLowerCase().startsWith(name.toLowerCase() + ":")) {
@@ -1683,7 +1755,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void removeHeaderIgnoreCase(List<String> headers, String name) {
-        if (headers == null || headers.size() <= 1) return;
+        if (headers == null || headers.size() <= 1)
+            return;
         for (int i = headers.size() - 1; i >= 1; i--) {
             String h = headers.get(i);
             if (h.toLowerCase().startsWith(name.toLowerCase() + ":")) {
@@ -1693,7 +1766,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private String expandInlineTags(String input) {
-        if (input == null || input.isEmpty()) return input;
+        if (input == null || input.isEmpty())
+            return input;
         String out = input;
         out = replaceDirtyTag(out, TAG_DIRTY, false);
         out = replaceDirtyTag(out, TAG_DIRTY_NULL, true);
@@ -1734,7 +1808,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private byte[] buildBodyBytesWithTags(String body, Charset charsetForText) {
-        if (body == null || body.isEmpty()) return new byte[0];
+        if (body == null || body.isEmpty())
+            return new byte[0];
         if (!body.contains("{{")) {
             return body.getBytes(charsetForText);
         }
@@ -1783,8 +1858,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 count = 0;
             }
             if (count > 0) {
-                if (isNull) writeNullBytes(out, count);
-                else writeRandomDigits(out, count);
+                if (isNull)
+                    writeNullBytes(out, count);
+                else
+                    writeRandomDigits(out, count);
             }
             idx = end;
         }
@@ -1793,7 +1870,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void writeText(ByteArrayOutputStream out, String s, Charset cs) {
-        if (s == null || s.isEmpty()) return;
+        if (s == null || s.isEmpty())
+            return;
         try {
             out.write(s.getBytes(cs));
         } catch (Exception ignored) {
@@ -1801,7 +1879,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void writeNullBytes(ByteArrayOutputStream out, int count) {
-        if (count <= 0) return;
+        if (count <= 0)
+            return;
         byte[] buf = new byte[Math.min(count, 8192)];
         int remaining = count;
         while (remaining > 0) {
@@ -1812,13 +1891,15 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     private void writeRandomDigits(ByteArrayOutputStream out, int count) {
-        if (count <= 0) return;
+        if (count <= 0)
+            return;
         Random r = new Random();
         byte[] buf = new byte[Math.min(count, 8192)];
         int remaining = count;
         while (remaining > 0) {
             int n = Math.min(remaining, buf.length);
-            for (int i = 0; i < n; i++) buf[i] = (byte) ('0' + r.nextInt(10));
+            for (int i = 0; i < n; i++)
+                buf[i] = (byte) ('0' + r.nextInt(10));
             out.write(buf, 0, n);
             remaining -= n;
         }
@@ -1839,23 +1920,44 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
     }
 
     class HistoryTableModel extends AbstractTableModel {
-        private final String[] columns = {"#", "Method", "Path", "Status", "Length", "Time(ms)", "Clock"};
-        @Override public int getRowCount() { return historyEntries.size(); }
-        @Override public int getColumnCount() { return columns.length; }
-        @Override public String getColumnName(int col) { return columns[col]; }
-        @Override public Object getValueAt(int row, int col) {
+        private final String[] columns = { "#", "Method", "Path", "Status", "Length", "Time(ms)", "Clock" };
+
+        @Override
+        public int getRowCount() {
+            return historyEntries.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return columns.length;
+        }
+
+        @Override
+        public String getColumnName(int col) {
+            return columns[col];
+        }
+
+        @Override
+        public Object getValueAt(int row, int col) {
             HistoryEntry e = historyEntries.get(row);
             switch (col) {
-                case 0: return e.id;
-                case 1: return e.method != null ? e.method : "";
-                case 2: return e.path != null ? (e.path.length() > 40 ? e.path.substring(0, 37) + "..." : e.path) : "";
-                case 3: return e.status;
-                case 4: return e.length;
-                case 5: return e.durationMs;
-                case 6: return e.time;
-                default: return "";
+                case 0:
+                    return e.id;
+                case 1:
+                    return e.method != null ? e.method : "";
+                case 2:
+                    return e.path != null ? (e.path.length() > 40 ? e.path.substring(0, 37) + "..." : e.path) : "";
+                case 3:
+                    return e.status;
+                case 4:
+                    return e.length;
+                case 5:
+                    return e.durationMs;
+                case 6:
+                    return e.time;
+                default:
+                    return "";
             }
         }
     }
 }
-

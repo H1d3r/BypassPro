@@ -21,7 +21,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.zip.GZIPOutputStream;
 
-public class BypassMain implements IContextMenuFactory ,IProxyListener{
+public class BypassMain implements IContextMenuFactory, IProxyListener {
 
     // 重定向最大跳数
     private static final int MAX_REDIRECT_HOPS = 2;
@@ -30,12 +30,12 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return Utils.count++;
     }
 
-
     /**
      * 生成 payload 变体
-     * @param path 原始路径
+     * 
+     * @param path    原始路径
      * @param profile 配置 profile 名称
-     * @param method 原始请求方法（GET/POST/PUT 等）
+     * @param method  原始请求方法（GET/POST/PUT 等）
      */
     public List<BaseRequest> make_payload_v2(String path, String profile, String method) {
         if (path == null || path.isEmpty()) {
@@ -48,8 +48,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
         Boolean isEnd = false;
 
-        if(!path.isEmpty() && path.endsWith("/")) {
-            path = path.substring(0, path.length()-1);
+        if (!path.isEmpty() && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
             isEnd = true;
         }
         String[] paths = path.isEmpty() ? new String[0] : path.split("/");
@@ -57,7 +57,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         Map<String, Object> profileConfig = Utils.getProfileConfig(profile);
         List<BaseRequest> allRequests = new ArrayList<>();
         List<String> suffixList = safeStringList(profileConfig.get("suffix"));
-        if(isEnd) {
+        if (isEnd) {
             allRequests.addAll(makeRequestSuffix(suffixList, path, method));
             allRequests.addAll(makeRequestSuffix(suffixList, path + "/", method));
         } else {
@@ -66,7 +66,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
         // prefix 规则：对每层目录前置变形
         List<String> prefixList = safeStringList(profileConfig.get("prefix"));
-        if( paths.length > 1) {
+        if (paths.length > 1) {
             int paths_len = paths.length;
             if (isEnd) {
                 allRequests.addAll(makeRequestPrefix(prefixList, paths, paths_len, "/", method));
@@ -103,7 +103,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         List<?> in = (List<?>) o;
         List<String> out = new ArrayList<>(in.size());
         for (Object x : in) {
-            if (x == null) continue;
+            if (x == null)
+                continue;
             out.add(String.valueOf(x));
         }
         return out;
@@ -140,7 +141,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         for (Map.Entry<String, String> e : h.entrySet()) {
             String k = e.getKey();
             String v = e.getValue();
-            if (k == null) continue;
+            if (k == null)
+                continue;
             pairs.add(k.trim().toLowerCase() + "=" + String.valueOf(v));
         }
         Collections.sort(pairs);
@@ -148,8 +150,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return sb.toString();
     }
 
-
-    public static List<BaseRequest> makeRequestSuffix(List<String> suffixList, String path, String method){
+    public static List<BaseRequest> makeRequestSuffix(List<String> suffixList, String path, String method) {
         List<BaseRequest> baseRequestList = new ArrayList<>();
 
         for (String item : suffixList) {
@@ -159,10 +160,11 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return baseRequestList;
     }
 
-    public static List<BaseRequest> makeRequestPrefix(List<String> prefixList, String[] paths, int paths_len, String end, String method){
+    public static List<BaseRequest> makeRequestPrefix(List<String> prefixList, String[] paths, int paths_len,
+            String end, String method) {
         List<BaseRequest> baseRequestList = new ArrayList<>();
         for (String item : prefixList) {
-            for (int i=0; i < paths_len; i++) {
+            for (int i = 0; i < paths_len; i++) {
                 String _target = paths[i];
                 String new_path = "";
 
@@ -176,10 +178,10 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return baseRequestList;
     }
 
-    public static List<BaseRequest> makeRequestHeader(List<?> headerList, String path, String method){
+    public static List<BaseRequest> makeRequestHeader(List<?> headerList, String path, String method) {
         List<BaseRequest> baseRequestList = new ArrayList<>();
         for (Object item : headerList) {
-            if(item instanceof Map){
+            if (item instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, String> headers = (Map<String, String>) ((HashMap<String, String>) item).clone();
                 baseRequestList.add(new BaseRequest(method, "/" + path, headers));
@@ -190,9 +192,10 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
     /**
      * 在目录边界插入标记（一次只改一个边界）：
-     * a/b/c  + ";"  => a;/b/c、a/b;/c
+     * a/b/c + ";" => a;/b/c、a/b;/c
      */
-    public static List<BaseRequest> makeRequestBoundaryInsert(List<String> insertList, String[] paths, String end, String method) {
+    public static List<BaseRequest> makeRequestBoundaryInsert(List<String> insertList, String[] paths, String end,
+            String method) {
         List<BaseRequest> baseRequestList = new ArrayList<>();
         if (insertList == null || insertList.isEmpty() || paths == null || paths.length < 2) {
             return baseRequestList;
@@ -215,8 +218,6 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return baseRequestList;
     }
 
-
-
     class Run_request implements Runnable {
         private BaseRequest baseRequest;
         private IHttpRequestResponse iHttpRequestResponse;
@@ -225,7 +226,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         public Run_request(BaseRequest baseRequest, IHttpRequestResponse iHttpRequestResponse, String tool) {
             this.baseRequest = baseRequest;
             this.iHttpRequestResponse = iHttpRequestResponse;
-            this.tool=tool;
+            this.tool = tool;
         }
 
         @Override
@@ -242,7 +243,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
                     return;
                 }
 
-                IRequestInfo requestInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse.getHttpService(), oldRequestBytes);
+                IRequestInfo requestInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse.getHttpService(),
+                        oldRequestBytes);
                 List<String> newHeaders = new ArrayList<>(requestInfo.getHeaders());
                 if (newHeaders.isEmpty()) {
                     Utils.panel.addErrorRequestNum(1);
@@ -290,8 +292,10 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
                 }
                 byte[] newRequestBytes = Utils.helpers.buildHttpMessage(newHeaders, body);
 
-                IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(iHttpRequestResponse.getHttpService(), newRequestBytes);
-                IHttpRequestResponse finalResponse = followRedirectsIfNeeded(firstResponse, newRequestBytes, iHttpRequestResponse.getHttpService(), MAX_REDIRECT_HOPS);
+                IHttpRequestResponse firstResponse = Utils.callbacks
+                        .makeHttpRequest(iHttpRequestResponse.getHttpService(), newRequestBytes);
+                IHttpRequestResponse finalResponse = followRedirectsIfNeeded(firstResponse, newRequestBytes,
+                        iHttpRequestResponse.getHttpService(), MAX_REDIRECT_HOPS);
 
                 byte[] oldResponseBytes = iHttpRequestResponse.getResponse();
                 byte[] finalResponseBytes = (finalResponse == null) ? null : finalResponse.getResponse();
@@ -308,7 +312,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
                 boolean shouldLog = isCandidateStatus(newStatus) && (ratio < threshold || statusClassChanged);
 
-                //Utils.panel.addFinishRequestNum(1);
+                // Utils.panel.addFinishRequestNum(1);
                 addFinishRequestNum(1);
 
                 if (finalResponse != null && finalResponseBytes != null && shouldLog) {
@@ -316,8 +320,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
                     addLog(finalResponse, 0, 0, 0, title, tool);
                 }
 
-
-            }catch(Throwable ee) {
+            } catch (Throwable ee) {
                 Utils.panel.addErrorRequestNum(1);
 
             }
@@ -378,15 +381,18 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             return null;
         }
         for (String h : headers) {
-            if (h == null) continue;
-            if (h.regionMatches(true, 0, name, 0, name.length()) && h.length() > name.length() && h.charAt(name.length()) == ':') {
+            if (h == null)
+                continue;
+            if (h.regionMatches(true, 0, name, 0, name.length()) && h.length() > name.length()
+                    && h.charAt(name.length()) == ':') {
                 return h.substring(name.length() + 1).trim();
             }
         }
         return null;
     }
 
-    private IHttpRequestResponse followRedirectsIfNeeded(IHttpRequestResponse firstResponse, byte[] originalRequestBytes, IHttpService service, int maxHops) {
+    private IHttpRequestResponse followRedirectsIfNeeded(IHttpRequestResponse firstResponse,
+            byte[] originalRequestBytes, IHttpService service, int maxHops) {
         if (firstResponse == null || firstResponse.getResponse() == null || service == null) {
             return firstResponse;
         }
@@ -425,7 +431,9 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
                     return current;
                 }
 
-                String method = (code == 307 || code == 308) ? Utils.helpers.analyzeRequest(service, originalRequestBytes).getMethod() : "GET";
+                String method = (code == 307 || code == 308)
+                        ? Utils.helpers.analyzeRequest(service, originalRequestBytes).getMethod()
+                        : "GET";
                 byte[] nextReq = buildFollowRequest(originalRequestBytes, service, next, method);
                 current = Utils.callbacks.makeHttpRequest(service, nextReq);
                 if (current == null) {
@@ -463,7 +471,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
         // method 变更/重定向跟随时，清理与 body 强相关的头，避免 GET 还带旧 Content-Length 导致异常
         if (body == null) {
-            removeHeadersIgnoreCase(headers, "Content-Length", "Transfer-Encoding", "Content-Type", "Content-Encoding", "Expect");
+            removeHeadersIgnoreCase(headers, "Content-Length", "Transfer-Encoding", "Content-Type", "Content-Encoding",
+                    "Expect");
         } else {
             removeHeadersIgnoreCase(headers, "Transfer-Encoding", "Expect");
             updateOrAddHeader(headers, "Content-Length", String.valueOf(body.length));
@@ -477,12 +486,15 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         }
         for (int i = headers.size() - 1; i >= 1; i--) {
             String h = headers.get(i);
-            if (h == null) continue;
+            if (h == null)
+                continue;
             int colon = h.indexOf(':');
-            if (colon <= 0) continue;
+            if (colon <= 0)
+                continue;
             String n = h.substring(0, colon).trim();
             for (String name : names) {
-                if (name == null) continue;
+                if (name == null)
+                    continue;
                 if (n.equalsIgnoreCase(name)) {
                     headers.remove(i);
                     break;
@@ -490,7 +502,6 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             }
         }
     }
-
 
     /**
      * 右键菜单：Send to BypassPro (Access Control / WAF)
@@ -500,7 +511,9 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         List<JMenuItem> list;
         list = new ArrayList<JMenuItem>();
 
-        if(invocation != null && invocation.getSelectedMessages() != null && invocation.getSelectedMessages()[0] != null && invocation.getSelectedMessages()[0].getHttpService() != null) {
+        if (invocation != null && invocation.getSelectedMessages() != null
+                && invocation.getSelectedMessages()[0] != null
+                && invocation.getSelectedMessages()[0].getHttpService() != null) {
             JMenuItem acMenuItem = new JMenuItem("Send to BypassPro (Access Control)");
             JMenuItem wafMenuItem = new JMenuItem("Send to BypassPro (WAF)");
             JMenuItem manualWafMenuItem = new JMenuItem("Send to BypassPro (Manual WAF)");
@@ -561,16 +574,20 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
                         title,
                         nextId(), tool));
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private static int findHeaderIndex(List<String> headers, String headerName) {
-        if (headers == null || headerName == null) return -1;
+        if (headers == null || headerName == null)
+            return -1;
         for (int i = 1; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (h == null) continue;
+            if (h == null)
+                continue;
             int colon = h.indexOf(':');
-            if (colon <= 0) continue;
+            if (colon <= 0)
+                continue;
             String name = h.substring(0, colon).trim();
             if (name.equalsIgnoreCase(headerName)) {
                 return i;
@@ -579,27 +596,38 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         return -1;
     }
 
-
     private static synchronized void addAllRequestNum(int num) {
         Utils.panel.addAllRequestNum(num);
     }
-    private static synchronized  void addFinishRequestNum(int num) {
+
+    private static synchronized void addFinishRequestNum(int num) {
         Utils.panel.addFinishRequestNum(num);
     }
-//    public void setThread_num(int number) {
-//        thread_num = number;
-//    }
+    // public void setThread_num(int number) {
+    // thread_num = number;
+    // }
 
     public void processHttp(IHttpRequestResponse[] iHttpRequestResponses, String tool, String profile) {
 
-        for(IHttpRequestResponse iHttpRequestResponse : iHttpRequestResponses) {
+        for (IHttpRequestResponse iHttpRequestResponse : iHttpRequestResponses) {
             IRequestInfo reqInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse);
             String old_path = reqInfo.getUrl().getPath();
-            String originalMethod = reqInfo.getMethod();  // 获取原始请求方法
+            String query = reqInfo.getUrl().getQuery();
+            String originalMethod = reqInfo.getMethod(); // 获取原始请求方法
             // response 可能为空（例如主动扫描选中未返回的请求），避免这里直接 NPE
 
             List<BaseRequest> allRequests;
             allRequests = make_payload_v2(old_path, profile, originalMethod);
+
+            if (query != null && !query.isEmpty()) {
+                for (BaseRequest r : allRequests) {
+                    if (r.path.contains("?")) {
+                        r.path = r.path + "&" + query;
+                    } else {
+                        r.path = r.path + "?" + query;
+                    }
+                }
+            }
 
             int thread_num = Utils.panel.getThreadNum();
 
@@ -608,7 +636,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
 
             // 更新请求计数
             addAllRequestNum(allRequests.size());
-            for(BaseRequest baseRequest: allRequests) {
+            for (BaseRequest baseRequest : allRequests) {
                 es.submit(new BypassMain.Run_request(baseRequest, iHttpRequestResponse, tool));
             }
 
@@ -616,11 +644,13 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             if ("waf".equals(profile)) {
                 byte[] requestBytes = iHttpRequestResponse.getRequest();
                 if (requestBytes != null) {
-                    IRequestInfo wafReqInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse.getHttpService(), requestBytes);
+                    IRequestInfo wafReqInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse.getHttpService(),
+                            requestBytes);
                     String wafMethod = wafReqInfo.getMethod();
 
                     if (hasBody(wafMethod, requestBytes, wafReqInfo)) {
-                        List<byte[]> bodyEncodedRequests = generateBodyEncodedRequests(requestBytes, wafReqInfo, iHttpRequestResponse.getHttpService());
+                        List<byte[]> bodyEncodedRequests = generateBodyEncodedRequests(requestBytes, wafReqInfo,
+                                iHttpRequestResponse.getHttpService());
                         addAllRequestNum(bodyEncodedRequests.size());
 
                         for (byte[] encodedRequest : bodyEncodedRequests) {
@@ -647,7 +677,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     /**
      * 生成 Body 编码变体请求
      */
-    private List<byte[]> generateBodyEncodedRequests(byte[] originalRequest, IRequestInfo reqInfo, IHttpService service) {
+    private List<byte[]> generateBodyEncodedRequests(byte[] originalRequest, IRequestInfo reqInfo,
+            IHttpService service) {
         List<byte[]> result = new ArrayList<>();
 
         int bodyOffset = reqInfo.getBodyOffset();
@@ -661,6 +692,9 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         }
 
         String originalContentType = getOriginalContentType(originalHeaders);
+        if (originalContentType == null || originalContentType.isEmpty()) {
+            originalContentType = "application/x-www-form-urlencoded";
+        }
 
         Map<String, Object> charsetOptions = Utils.getWafBodyCharsetOptions();
         Map<String, Object> transformOptions = Utils.getWafBodyTransformOptions();
@@ -711,7 +745,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         }
 
         // Gzip 变体（避免重复 gzip：原始已 gzip 则跳过）
-        if (Boolean.TRUE.equals(transformOptions.get("gzip")) && !hasHeaderToken(originalHeaders, "Content-Encoding", "gzip")) {
+        if (Boolean.TRUE.equals(transformOptions.get("gzip"))
+                && !hasHeaderToken(originalHeaders, "Content-Encoding", "gzip")) {
             byte[] gzipped = gzipBody(originalBody);
             if (gzipped != null) {
                 result.add(buildRequestWithGzipBody(originalHeaders, gzipped));
@@ -721,7 +756,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         // Content-Type Spoof 变体
         if (Boolean.TRUE.equals(ctOptions.get("form_urlencoded"))) {
             if (!originalContentType.toLowerCase().contains("x-www-form-urlencoded")) {
-                result.add(buildRequestWithContentType(originalHeaders, originalBody, "application/x-www-form-urlencoded"));
+                result.add(buildRequestWithContentType(originalHeaders, originalBody,
+                        "application/x-www-form-urlencoded"));
             }
         }
         if (Boolean.TRUE.equals(ctOptions.get("multipart"))) {
@@ -773,7 +809,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     /**
      * 构建带 charset 的请求（保留原始 Content-Type）
      */
-    private byte[] buildRequestWithCharset(List<String> originalHeaders, byte[] encodedBody, String contentType, String charset) {
+    private byte[] buildRequestWithCharset(List<String> originalHeaders, byte[] encodedBody, String contentType,
+            String charset) {
         List<String> newHeaders = new ArrayList<>(originalHeaders);
         updateOrAddHeaderWithCharset(newHeaders, contentType, charset);
         // 修改 body 后必须移除 Transfer-Encoding，避免 CL-TE 冲突
@@ -785,7 +822,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     /**
      * 用指定字符集编码 Body
      */
-    private byte[] encodeBodyWithCharset(byte[] body, String charsetName, String contentType, List<String> originalHeaders) {
+    private byte[] encodeBodyWithCharset(byte[] body, String charsetName, String contentType,
+            List<String> originalHeaders) {
         try {
             // 非文本类 content-type 或已 gzip 的 body，不做字符集转码（避免破坏二进制）
             if (!isTextualContentType(contentType)) {
@@ -808,7 +846,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     }
 
     private boolean isTextualContentType(String contentType) {
-        if (contentType == null) return false;
+        if (contentType == null)
+            return false;
         String ct = contentType.toLowerCase();
         return ct.contains("json")
                 || ct.contains("xml")
@@ -819,14 +858,18 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     }
 
     private boolean hasHeaderToken(List<String> headers, String name, String token) {
-        if (headers == null || name == null || token == null) return false;
+        if (headers == null || name == null || token == null)
+            return false;
         for (int i = 1; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (h == null) continue;
+            if (h == null)
+                continue;
             int colon = h.indexOf(':');
-            if (colon <= 0) continue;
+            if (colon <= 0)
+                continue;
             String n = h.substring(0, colon).trim();
-            if (!n.equalsIgnoreCase(name)) continue;
+            if (!n.equalsIgnoreCase(name))
+                continue;
             String v = h.substring(colon + 1).trim().toLowerCase();
             return v.contains(token.toLowerCase());
         }
@@ -866,7 +909,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     private byte[] buildRequestWithContentType(List<String> originalHeaders, byte[] body, String contentType) {
         List<String> newHeaders = new ArrayList<>(originalHeaders);
         updateOrAddHeader(newHeaders, "Content-Type", contentType);
-        // buildHttpMessage 构造的是非 chunked 的实体 body：移除 Transfer-Encoding，并同步 Content-Length
+        // buildHttpMessage 构造的是非 chunked 的实体 body：移除 Transfer-Encoding，并同步
+        // Content-Length
         removeHeadersIgnoreCase(newHeaders, "Transfer-Encoding");
         updateOrAddHeader(newHeaders, "Content-Length", String.valueOf(body == null ? 0 : body.length));
         return Utils.helpers.buildHttpMessage(newHeaders, body);
@@ -926,15 +970,18 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             String[] pairs = bodyStr.split("&");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             for (String pair : pairs) {
-                if (pair == null || pair.isEmpty()) continue;
+                if (pair == null || pair.isEmpty())
+                    continue;
                 String[] kv = pair.split("=", 2);
                 String key = URLDecoder.decode(kv[0], cs.name());
                 String value = kv.length > 1 ? URLDecoder.decode(kv[1], cs.name()) : "";
 
                 out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
-                out.write(("Content-Disposition: form-data; name=\"" + key + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+                out.write(
+                        ("Content-Disposition: form-data; name=\"" + key + "\"\r\n").getBytes(StandardCharsets.UTF_8));
                 // 显式声明字段字符集，提升后端兼容性
-                out.write(("Content-Type: text/plain; charset=" + cs.name() + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
+                out.write(("Content-Type: text/plain; charset=" + cs.name() + "\r\n")
+                        .getBytes(StandardCharsets.ISO_8859_1));
                 out.write(("\r\n").getBytes(StandardCharsets.ISO_8859_1));
                 out.write(value.getBytes(cs));
                 out.write(("\r\n").getBytes(StandardCharsets.ISO_8859_1));
@@ -951,11 +998,14 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         if (headers != null) {
             for (int i = 1; i < headers.size(); i++) {
                 String h = headers.get(i);
-                if (h == null) continue;
+                if (h == null)
+                    continue;
                 int colon = h.indexOf(':');
-                if (colon <= 0) continue;
+                if (colon <= 0)
+                    continue;
                 String n = h.substring(0, colon).trim();
-                if (!n.equalsIgnoreCase("Content-Type")) continue;
+                if (!n.equalsIgnoreCase("Content-Type"))
+                    continue;
                 ct = h.substring(colon + 1).trim();
                 break;
             }
@@ -998,11 +1048,14 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         // 优先修改已有 Content-Type：仅替换/追加 charset，保留其它参数
         for (int i = 1; i < headers.size(); i++) {
             String h = headers.get(i);
-            if (h == null) continue;
+            if (h == null)
+                continue;
             int colon = h.indexOf(':');
-            if (colon <= 0) continue;
+            if (colon <= 0)
+                continue;
             String n = h.substring(0, colon).trim();
-            if (!n.equalsIgnoreCase("Content-Type")) continue;
+            if (!n.equalsIgnoreCase("Content-Type"))
+                continue;
 
             String v = h.substring(colon + 1).trim();
             // 去掉已有 charset=...
@@ -1020,7 +1073,8 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             return;
         }
         // 没有 Content-Type 时补一个
-        String ct = (fallbackContentType == null || fallbackContentType.isEmpty()) ? "application/octet-stream" : fallbackContentType;
+        String ct = (fallbackContentType == null || fallbackContentType.isEmpty()) ? "application/octet-stream"
+                : fallbackContentType;
         headers.add("Content-Type: " + ct + "; charset=" + charset);
     }
 
@@ -1044,8 +1098,6 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
         headers.add(name + ": " + value);
     }
 
-    
-
     /**
      * 处理 Body 编码变体请求的 Runnable
      */
@@ -1065,7 +1117,7 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
             try {
                 IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(
                         originalReqResp.getHttpService(), requestBytes);
-                
+
                 IHttpRequestResponse finalResponse = followRedirectsIfNeeded(
                         firstResponse, requestBytes, originalReqResp.getHttpService(), MAX_REDIRECT_HOPS);
 
@@ -1106,32 +1158,32 @@ public class BypassMain implements IContextMenuFactory ,IProxyListener{
     @Override
     public void processProxyMessage(boolean messageIsRequest, IInterceptedProxyMessage message) {
 
-            if (Utils.isProxySelected && !messageIsRequest) {
-                IHttpRequestResponse httpRequestResponse = message.getMessageInfo();
-                byte[] old_response  = httpRequestResponse.getResponse();
-                if(old_response != null) {
-                    short old_status = Utils.helpers.analyzeResponse(old_response).getStatusCode();
-                    String path = Utils.helpers.analyzeRequest(httpRequestResponse).getUrl().getPath();
-                    IHttpRequestResponse[] iHttpRequestResponses = new IHttpRequestResponse[]{httpRequestResponse};
+        if (Utils.isProxySelected && !messageIsRequest) {
+            IHttpRequestResponse httpRequestResponse = message.getMessageInfo();
+            byte[] old_response = httpRequestResponse.getResponse();
+            if (old_response != null) {
+                short old_status = Utils.helpers.analyzeResponse(old_response).getStatusCode();
+                String path = Utils.helpers.analyzeRequest(httpRequestResponse).getUrl().getPath();
+                IHttpRequestResponse[] iHttpRequestResponses = new IHttpRequestResponse[] { httpRequestResponse };
 
-                    if (old_status == 401 || old_status == 403) {
-                        int lastSlash = path.lastIndexOf('/');
-                        int lastDot = path.lastIndexOf('.');
-                        if (lastDot > lastSlash && lastDot >= 0 && lastDot < path.length() - 1) {
-                            String extension = path.substring(lastDot + 1).toLowerCase();
-                            if (!extension.isEmpty() && Utils.getIgnoreExtensions().contains(extension)) {
-                                return;
-                            }
+                if (old_status == 401 || old_status == 403) {
+                    int lastSlash = path.lastIndexOf('/');
+                    String fileName = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
+                    int lastDot = fileName.lastIndexOf('.');
+                    if (lastDot >= 0 && lastDot < fileName.length() - 1) {
+                        String extension = fileName.substring(lastDot + 1).toLowerCase();
+                        if (!extension.isEmpty() && Utils.getIgnoreExtensions().contains(extension)) {
+                            return;
                         }
-                            new Thread(() ->
-                            {
-                                processHttp(iHttpRequestResponses, "Auto Scan", "access_control");
-                            }).start();
-
                     }
+                    new Thread(() -> {
+                        processHttp(iHttpRequestResponses, "Auto Scan", "access_control");
+                    }).start();
 
                 }
+
             }
+        }
 
     }
 

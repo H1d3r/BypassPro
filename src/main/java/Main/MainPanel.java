@@ -44,14 +44,13 @@ public class MainPanel extends JPanel implements ITab {
         httpSplitPane.setResizeWeight(0.50);
         // request
         JTabbedPane reqJTabbedPane = new JTabbedPane();
-        reqJTabbedPane.add("Request",bypassTable.getRequestViewer().getComponent());
+        reqJTabbedPane.add("Request", bypassTable.getRequestViewer().getComponent());
         // response
         JTabbedPane resJTabbedPane = new JTabbedPane();
         resJTabbedPane.add("Response", bypassTable.getResponseViewer().getComponent());
-        httpSplitPane.add(reqJTabbedPane,"left");
-        httpSplitPane.add(resJTabbedPane,"right");
+        httpSplitPane.add(reqJTabbedPane, "left");
+        httpSplitPane.add(resJTabbedPane, "right");
         splitPane.setRightComponent(httpSplitPane);
-
 
         // 控制面板
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
@@ -131,7 +130,7 @@ public class MainPanel extends JPanel implements ITab {
     }
 
     public int getThreadNum() {
-        if(StringUtils.isBlank(threadNumText.getText())) {
+        if (StringUtils.isBlank(threadNumText.getText())) {
             return DEFAULT_THREAD_NUM;
         }
         try {
@@ -165,7 +164,8 @@ public class MainPanel extends JPanel implements ITab {
     }
 
     public void addErrorRequestNum(int num) {
-        SwingUtilities.invokeLater(() -> errorRequestNumText.setText(String.valueOf(Integer.parseInt(errorRequestNumText.getText()) + num)));
+        SwingUtilities.invokeLater(() -> errorRequestNumText
+                .setText(String.valueOf(Integer.parseInt(errorRequestNumText.getText()) + num)));
     }
 
     public double getSimilarityThreshold() {
@@ -174,24 +174,26 @@ public class MainPanel extends JPanel implements ITab {
     }
 
     private void updateProgressBar() {
-        if (progressBar == null) return;
-        int all = 0, finish = 0;
+        if (progressBar == null)
+            return;
+        int all = 0, finish = 0, error = 0;
         try {
             all = Integer.parseInt(allRequestNumberText.getText());
             finish = Integer.parseInt(finishRequestNumberText.getText());
-        } catch (Exception ignored) {}
+            error = Integer.parseInt(errorRequestNumText.getText());
+        } catch (Exception ignored) {
+        }
 
         if (all <= 0) {
             progressBar.setIndeterminate(false);
             progressBar.setValue(0);
-        } else if (finish >= all) {
+        } else if (finish + error >= all) {
             progressBar.setIndeterminate(false);
             progressBar.setValue(100);
         } else {
             progressBar.setIndeterminate(true);
         }
     }
-
 
     public JCheckBox getIsAutoCheckBox() {
         return isAutoCheckBox;

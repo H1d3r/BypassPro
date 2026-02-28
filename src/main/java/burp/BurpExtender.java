@@ -9,16 +9,12 @@ public class BurpExtender implements IBurpExtender, IExtensionStateListener {
     public static IBurpExtenderCallbacks callbacks;
     private MainPanel panel;
     private String NAME = "BypassPro";
-    private String VERSION = "4.0";
+    private String VERSION = "4.1";
 
-
-    public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks)
-    {
-
+    public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
 
         BurpExtender.callbacks = callbacks;
         Utils.setBurpPresent(callbacks);
-
 
         this.stdout = new PrintWriter(callbacks.getStdout(), true);
         callbacks.setExtensionName("BypassPro");
