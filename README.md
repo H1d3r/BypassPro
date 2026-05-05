@@ -718,45 +718,9 @@ Dashboard 也做了重构，不再只是简单堆结果表：
 
 Manual WAF 底部也增加了当前请求摘要、payload hints、diff 状态和 Gh0st Bits 还原预览。Tooltip 支持多行展示，鼠标悬停时显示每个按钮的用途、适用场景和操作方式。
 
-#### 8. 稳定性与测试
 
-- 全局线程池复用，避免扫描时线程爆炸。
-- Dashboard 表格写入加锁，降低并发写入风险。
-- History 最多保留 50 条。
-- Undo / Redo 最多保留 20 步。
-- 增加 Ghost Bits Engine、Raw Socket、Auto Ghost Bits、Manual Sender Routing 等单元测试。
 
-### 用法
-
-#### 1. 安装与启动
-
-1. 使用 Maven 构建插件：
-
-```bash
-mvn package
-```
-
-1. 在 Burp Suite 中加载生成的 jar：
-
-```text
-target/BypassPro-5.0.jar
-```
-
-1. 首次启动时，插件会自动生成外置配置文件：
-
-```text
-~/.config/BypassPro/BypassPro-config.yaml
-```
-
-1. 后续升级插件不会覆盖已有配置。只有在 Config 页面点击 `Reinit` 并确认后，才会重新初始化配置文件。
-
-运行环境：
-
-- 插件运行目标：Java 8。
-- 构建环境：JDK 8+。
-- Burp 加载后会出现 `BypassPro` 主 Tab。
-
-#### 2. 三个入口怎么选
+#### 1.三个入口怎么选
 
 BypassPro 5.0 主要有四个使用入口：
 
@@ -776,7 +740,7 @@ BypassPro 5.0 主要有四个使用入口：
 - 想自动尝试 WAF 绕过：右键 `WAF`。
 - 想自己选区、编码、组合、Raw 发包：右键 `Manual WAF`。
 
-#### 3. Auto-权限绕过
+#### 2. Auto-权限绕过
 
 Auto-权限绕过用于 401/403、未授权访问、访问控制绕过等场景。
 
@@ -819,7 +783,7 @@ Dashboard 入表逻辑：
   - `sim:0.42 < 0.85`
   - `class changed`
 
-#### 4. Auto-WAF绕过
+#### 3. Auto-WAF绕过
 
 Auto-WAF绕过用于对某一个请求自动生成 WAF 绕过变体。
 
@@ -891,7 +855,7 @@ profiles:
   - Dashboard 的 `tool` 可能显示为 `send-waf/ghost`。
   - `Reason` 会显示 `ghost:eq` / `ghost:parser` / `ghost:template`、scope、token、sender、fold 摘要等信息。
 
-#### 5. Manual-WAF 工作台
+#### 4. Manual-WAF 工作台
 
 Manual-WAF 是 5.0 的核心工作台。它不是自动扫描器，而是给你一个“可编辑请求 + 选区变形 + Raw/Burp 发包 + 历史记录”的绕过实验环境。
 
@@ -988,63 +952,6 @@ Content-Length: 18
 
 默认不会因为 `classic` 里包含 `class` 前缀就生成 Ghost Bits 候选。`class` token 必须有明确边界或出现在 `classLoader` 这类真实语义里，避免误伤。
 
-#### 7. 模式背后的核心逻辑（How it works）
-
-##### A. 变形规则如何生成
-
-- 自动模式的变形主要来自配置文件：
-  - `profiles.auto_access_bypass`
-  - `profiles.auto_waf_bypass`
-- Path/Header 常规变形：
-  - **suffix**：对路径尾部追加变体（如 `/.`、`;/.css`、`%09` 等）。
-  - **prefix**：对路径的每一层目录做前缀变体（如 `;/`、`%2e/`、`images/..;/` 等）。
-  - **boundary_insert**：在目录边界插入标记（一次只改一个边界，避免组合爆炸）。
-  - **headers**：伪造/注入 Header 变体（如 `X-Forwarded-For`、`X-Client-IP` 等）。
-- Body/WAF 变形来自 `profiles.auto_waf_bypass.options`。
-- Ghost Bits 默认只生成 `eq` / `parser` 绕过候选；完整漏洞链模板需要显式开启。
-
-##### B. 自动模式如何回显/落表（减少噪声）
-
-- **落表候选状态码**：变体请求（如遇 30x 会跟随重定向，最多 2 跳）最终响应状态码命中以下集合时，才进入“可能入表”的判断：  
-`200/206/304/301/302/303/307/308/405/415`
-- **入表判定**：同时满足：
-  - **候选状态码命中**（见上）
-  - 且满足以下任意一条：
-    - **相似度低于阈值**：变体响应 body 与原始响应 body 的相似度 ratio 满足 `ratio < threshold`
-    - **状态码类别变化**：原始与变体的状态码“百位段”不同（例如 `403 -> 302`、`401 -> 200`）
-- **相似度阈值来源**：统一由 `general.similarity_threshold` 管理（在 `Config -> General` 设置）
-  - **0-1 含义**：表示“变体响应与原始响应的相似程度”（越接近 1 越相似）
-  - **值越大**：更容易满足 `ratio < threshold`，因此更容易入表（更宽松，噪声可能更多）
-  - **值越小**：更不容易入表（更严格，只保留差异更大的响应）
-
-##### C. 手动模式为什么不做相似度过滤
-
-- 手动模式的价值在于“人”在迭代选择变形与观察差异，所以工作台会保留所有尝试，方便回溯与对比。
-
-##### D. 手动模式的变换工具（Transform Tools）
-
-- Transform Tools 会对“你选中的文本”做编码/变形。
-- 有选区时以选区优先；没选区时只在工具能安全判断作用域时自动处理。
-- 为避免插入超大脏数据导致 Burp 卡顿，工作台支持用占位符插入脏数据：
-  - `{{dirty(N)}}`：发送时生成 N 位随机数字
-  - `{{dirtynull(N)}}`：发送时生成 N 个 NUL 字节
-  - 发送前会展开占位符并重算 `Content-Length`，保证实际发包字节与长度一致
-
-#### 内置规则（不可配置）
-
-以下规则硬编码在插件中，用户无法修改：
-
-
-| 规则              | 值                                                | 说明                       |
-| --------------- | ------------------------------------------------ | ------------------------ |
-| Auto Scan 触发状态码 | 401, 403                                         | Proxy 响应命中这些状态码时触发扫描     |
-| 落表候选状态码         | 200, 206, 304, 301, 302, 303, 307, 308, 405, 415 | 变体响应状态码必须在此范围才可能入表       |
-| 自动模式重定向跳数       | 最多 2 跳                                           | 跟随 30x 重定向的最大次数          |
-| Manual 模式重定向跳数  | 最多 10 跳                                          | Follow Redirect 开启时的最大次数 |
-| History 最大条数    | 50 条                                             | 超出后自动删除最旧记录              |
-| Undo/Redo 最大步数  | 20 步                                             | 超出后自动丢弃最旧状态              |
-| 静态资源过滤后缀        | .js, .css, .png, .jpg, .gif, .ico, .svg, .woff 等 | Auto Scan 不扫描这些后缀        |
-
 
 #### 快速开始（推荐流程）
 
@@ -1052,22 +959,6 @@ Content-Length: 18
 - **对可疑请求用主动模式复测**：右键发起 `Access Control` 或 `WAF`
 - **需要精细化研究时用 Manual WAF**：把请求送入工作台，多轮变形与对比
 
-### 参考资料
-
-- [Cast Attack: A New Threat Posed by Ghost Bits in Java](https://i.blackhat.com/Asia-26/Presentations/Asia-26-Bai-Cast-Attack-Ghost-Bits-4.23.pdf)
-- [Ghost Bits 相关资料 1](https://mp.weixin.qq.com/s/RTcPwZ72RowH_qdOIeZSDA)
-- [Ghost Bits 相关资料 2](https://mp.weixin.qq.com/s/fIvmKkT6e8d8PY5OruG4mw?scene=1&click_id=54)
-- [Ghost Bits 相关资料 3](https://mp.weixin.qq.com/s/WMD3MQ-8QM8hZXtTpbxFnA?click_id=55)
-
-### 构建
-
-- Maven 打包：
-  - `mvn -DskipTests package`
-  - 产物位于 `target/`
-
-### 注意事项
-
-- Auto Scan 会对命中条件的 Proxy 响应自动发起一批变体请求，目标站点存在 WAF/频率限制时建议关闭 Auto Scan，仅使用手动扫描。
 
 ### 历史案例
 
@@ -1084,14 +975,19 @@ Content-Length: 18
 部分企业可能无法及时升级版本，在nginx或者其他设备做防护处理。
 
 比如访问原始payload
+<img width="1970" height="1008" alt="image" src="https://github.com/user-attachments/assets/b36b8874-b615-44eb-895a-f6acd2d95022" />
 
 
 ok BypassPro给出 bypass 的payload：/api/v1/terminal/sessions.json?limit=1
 
-image
+<img width="2556" height="1074" alt="image" src="https://github.com/user-attachments/assets/aa6f0e13-d970-49d9-a3ff-b98671734e26" />
+
 
 #### 案例 2
 
-
+<img width="1010" height="324" alt="image" src="https://github.com/user-attachments/assets/f71b7668-74ee-4a2b-aabb-8ebea247121e" />
 
 emmm这个时候还是老版本，
+
+<img width="2866" height="1460" alt="image" src="https://github.com/user-attachments/assets/208ef4ff-3d3a-434f-85d8-bac3e34518f3" />
+
