@@ -257,6 +257,9 @@ Ghost 还原后还是 ../
 
 这会让后续路径规范化更早看到 `../`，不一定能绕过 Spring 的字面量检查。CVE-2025-41242 这条链需要的是 `.%u002e` 这个中间态。
 
+
+
+
 推荐做法二：直接用模板。
 
 1. 进入 `Gh0st Bits`。
@@ -279,6 +282,13 @@ Connection: close
 ↓
 /../../../etc/passwd
 ```
+
+<img width="2912" height="1534" alt="image" src="https://github.com/user-attachments/assets/695339a7-a1aa-4b67-a4db-6223c44d2eff" />
+
+<img width="2804" height="1564" alt="image" src="https://github.com/user-attachments/assets/351a54d6-cb41-4468-830e-443ddb420bdf" />
+
+<img width="2912" height="1626" alt="image" src="https://github.com/user-attachments/assets/b3fcd28f-677f-4dbb-9208-034a3923978b" />
+
 
 ###### 案例 B：fastjson `\x4_` 绕过 `@type`
 
