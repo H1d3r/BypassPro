@@ -56,7 +56,8 @@ public class MainPanel extends JPanel implements ITab {
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
         controlPanel.setBorder(new EmptyBorder(4, 8, 4, 8));
 
-        isAutoCheckBox = new JCheckBox("Auto Scan", false);
+        controlPanel.add(new JLabel("AutoScan:"));
+        isAutoCheckBox = new JCheckBox("", false);
         isAutoCheckBox.addActionListener(e -> Utils.isProxySelected = isAutoCheckBox.isSelected());
         controlPanel.add(isAutoCheckBox);
 

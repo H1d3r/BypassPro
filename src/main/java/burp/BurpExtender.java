@@ -3,13 +3,14 @@ package burp;
 import Main.*;
 import java.io.PrintWriter;
 import java.util.Map;
+import javax.swing.ToolTipManager;
 
 public class BurpExtender implements IBurpExtender, IExtensionStateListener {
     private PrintWriter stdout;
     public static IBurpExtenderCallbacks callbacks;
     private MainPanel panel;
     private String NAME = "BypassPro";
-    private String VERSION = "4.1";
+    private String VERSION = "5.0";
 
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
 
@@ -24,6 +25,15 @@ public class BurpExtender implements IBurpExtender, IExtensionStateListener {
         Utils.setConfigLoader(configLoader);
         Map<String, Object> config = configLoader.loadConfig();
         Utils.setConfigMap(config);
+
+        // 初始化国际化
+        I18n.setLang(Utils.getConfigLang());
+
+        // tooltip 鼠标移开才消失（默认 4 秒太短，多行内容看不完）
+        ToolTipManager tipManager = ToolTipManager.sharedInstance();
+        tipManager.setDismissDelay(Integer.MAX_VALUE);
+        tipManager.setInitialDelay(300);
+        tipManager.setReshowDelay(100);
 
         this.panel = new MainPanel();
         Utils.setPanel(this.panel);

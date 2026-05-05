@@ -78,7 +78,7 @@ public class BypassTableModel extends AbstractTableModel {
             case 7:
                 return "HTTP Status";
             case 8:
-                return "Time";
+                return "Reason";
             default:
                 return "";
         }
@@ -137,7 +137,7 @@ public class BypassTableModel extends AbstractTableModel {
             case 7:
                 return bypassEntry.status;
             case 8:
-                return bypassEntry.timestamp;
+                return bypassEntry.reason == null ? "" : bypassEntry.reason;
             default:
                 return "";
         }

@@ -1,8 +1,12 @@
 package Main;
 
+import Main.ghostbits.GhostBitsEngine;
+import Main.ghostbits.GhostBitsRule;
 import burp.IBurpExtenderCallbacks;
 import burp.IExtensionHelpers;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -12,12 +16,18 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Utils {
+    public static final String PROFILE_AUTO_ACCESS_BYPASS = "auto_access_bypass";
+    public static final String PROFILE_AUTO_WAF_BYPASS = "auto_waf_bypass";
+    public static final String PROFILE_MANUAL_WAF_BYPASS = "manual_waf_bypass";
 
     static boolean gotBurp = false;
     public static IBurpExtenderCallbacks callbacks;
@@ -57,9 +67,7 @@ public class Utils {
     }
 
     /**
-     * 兼容两种配置结构：
-     * 1) 旧版：顶层就是 suffix/prefix/headers
-     * 2) 新版：profiles: { access_control: {suffix/prefix/headers}, waf: {...} }
+     * 当前版配置只支持 profiles.auto_access_bypass / profiles.auto_waf_bypass / profiles.manual_waf_bypass。
      */
     public static Map<String, Object> getProfileConfig(String profile) {
         if (configMap == null) {
@@ -73,13 +81,9 @@ public class Utils {
             if (p instanceof Map) {
                 return castStringObjectMap(p);
             }
-            Object ac = profiles.get("access_control");
-            if (ac instanceof Map) {
-                return castStringObjectMap(ac);
-            }
         }
 
-        return configMap;
+        return Collections.emptyMap();
     }
 
     @SuppressWarnings("unchecked")
@@ -89,7 +93,7 @@ public class Utils {
 
     /**
      * 获取指定 profile 的 options
-     * @param profile profile 名称（access_control / waf）
+     * @param profile profile 名称
      * @return options Map，如果不存在返回 emptyMap
      */
     public static Map<String, Object> getProfileOptions(String profile) {
@@ -110,7 +114,7 @@ public class Utils {
      * @return body_charset Map，包含各种字符集的 true/false
      */
     public static Map<String, Object> getWafBodyCharsetOptions() {
-        Map<String, Object> options = getProfileOptions("waf");
+        Map<String, Object> options = getProfileOptions(PROFILE_AUTO_WAF_BYPASS);
         Object charsetObj = options.get("body_charset");
         if (charsetObj instanceof Map) {
             return castStringObjectMap(charsetObj);
@@ -123,7 +127,7 @@ public class Utils {
      * @return body_transform Map
      */
     public static Map<String, Object> getWafBodyTransformOptions() {
-        Map<String, Object> options = getProfileOptions("waf");
+        Map<String, Object> options = getProfileOptions(PROFILE_AUTO_WAF_BYPASS);
         Object transformObj = options.get("body_transform");
         if (transformObj instanceof Map) {
             return castStringObjectMap(transformObj);
@@ -132,14 +136,60 @@ public class Utils {
     }
 
     /**
+     * 获取 Ghost Bits 规则。
+     * Ghost Bits 缺失时应返回空规则，由调用方决定是否提示用户。
+     */
+    public static GhostBitsRule getGhostBitsRule() {
+        return GhostBitsRule.fromMap(getGhostBitsRuleMap());
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Map<String, Object> getGhostBitsRuleMap() {
+        if (configMap == null) {
+            return Collections.emptyMap();
+        }
+        Object profilesObj = configMap.get("profiles");
+        if (profilesObj instanceof Map) {
+            Map<String, Object> profiles = (Map<String, Object>) profilesObj;
+            Object manualObj = profiles.get(PROFILE_MANUAL_WAF_BYPASS);
+            if (manualObj instanceof Map) {
+                Object gb = ((Map<String, Object>) manualObj).get("ghost_bits");
+                if (gb instanceof Map) {
+                    return castStringObjectMap(gb);
+                }
+            }
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * 获取 Ghost Bits 引擎（每次都重新构造，规则量很小不在乎开销，方便配置热更新）。
+     */
+    public static GhostBitsEngine getGhostBitsEngine() {
+        return new GhostBitsEngine(getGhostBitsRule());
+    }
+
+    /**
      * 获取 WAF options 中的 content_type_spoof 配置
      * @return content_type_spoof Map
      */
     public static Map<String, Object> getWafContentTypeSpoofOptions() {
-        Map<String, Object> options = getProfileOptions("waf");
+        Map<String, Object> options = getProfileOptions(PROFILE_AUTO_WAF_BYPASS);
         Object ctObj = options.get("content_type_spoof");
         if (ctObj instanceof Map) {
             return castStringObjectMap(ctObj);
+        }
+        return Collections.emptyMap();
+    }
+
+    /**
+     * 获取 WAF options 中的 ghost_bits 配置。
+     */
+    public static Map<String, Object> getWafGhostBitsOptions() {
+        Map<String, Object> options = getProfileOptions(PROFILE_AUTO_WAF_BYPASS);
+        Object ghostObj = options.get("ghost_bits");
+        if (ghostObj instanceof Map) {
+            return castStringObjectMap(ghostObj);
         }
         return Collections.emptyMap();
     }
@@ -183,11 +233,24 @@ public class Utils {
     }
 
     /**
-     * 获取 access_control 的 ignore_extensions 列表
+     * 获取配置的界面语言。zh/en，缺省 zh。
+     */
+    public static String getConfigLang() {
+        Map<String, Object> general = getGeneralConfig();
+        Object langObj = general.get("lang");
+        if (langObj == null) {
+            return I18n.ZH;
+        }
+        String s = langObj.toString().trim().toLowerCase();
+        return I18n.EN.equals(s) ? I18n.EN : I18n.ZH;
+    }
+
+    /**
+     * 获取 Auto-权限绕过的 ignore_extensions 列表
      */
     @SuppressWarnings("unchecked")
     public static List<String> getIgnoreExtensions() {
-        Map<String, Object> ac = getProfileConfig("access_control");
+        Map<String, Object> ac = getProfileConfig(PROFILE_AUTO_ACCESS_BYPASS);
         Object extObj = ac.get("ignore_extensions");
         if (extObj instanceof List) {
             return (List<String>) extObj;
@@ -227,7 +290,11 @@ public class Utils {
         }
         if (sharedExecutor == null || sharedExecutor.isShutdown() || sharedExecutor.isTerminated() || sharedExecutorThreads != n) {
             ExecutorService old = sharedExecutor;
-            sharedExecutor = Executors.newFixedThreadPool(n, new ThreadFactory() {
+            BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>(Math.max(100, n * 100));
+            sharedExecutor = new ThreadPoolExecutor(n, n,
+                    0L, TimeUnit.MILLISECONDS,
+                    queue,
+                    new ThreadFactory() {
                 private final AtomicInteger idx = new AtomicInteger(1);
 
                 @Override
@@ -236,7 +303,8 @@ public class Utils {
                     t.setName("BypassPro-" + idx.getAndIncrement());
                     return t;
                 }
-            });
+            },
+                    new ThreadPoolExecutor.CallerRunsPolicy());
             sharedExecutorThreads = n;
             if (old != null) {
                 try {
@@ -281,13 +349,15 @@ public class Utils {
         }
         Map<String, Object> yamlMap=null;
         // 读取YAML文件
-        try {
-            InputStream inputStream = BypassMain.class.getResourceAsStream(filename);
-
-            Yaml yaml = new Yaml();
+        try (InputStream inputStream = BypassMain.class.getResourceAsStream(filename)) {
+            if (inputStream == null) {
+                return Collections.emptyMap();
+            }
+            LoaderOptions loaderOptions = new LoaderOptions();
+            loaderOptions.setAllowDuplicateKeys(false);
+            Yaml yaml = new Yaml(new SafeConstructor(loaderOptions));
             // 将YAML文件的内容加载为Map对象
             yamlMap = yaml.load(inputStream);
-            inputStream.close();
         } catch (Exception exception) {
             System.out.println("配置文件加载失败，请检查配置文件 BypassPro-config.yaml");
             exception.printStackTrace();

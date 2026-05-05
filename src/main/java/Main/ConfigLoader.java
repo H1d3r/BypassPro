@@ -88,10 +88,16 @@ public class ConfigLoader {
      * 保存 general 配置
      */
     public boolean saveGeneralConfig(int threads, double similarityThreshold) {
+        return saveGeneralConfig(threads, similarityThreshold, null);
+    }
+
+    /**
+     * 保存 general 配置（含语言）。lang 为 null 时不修改语言字段。
+     */
+    public boolean saveGeneralConfig(int threads, double similarityThreshold, String lang) {
         try {
             String raw = readConfigText();
             if (raw == null || raw.isEmpty()) {
-                // 文件为空时退化为结构化写入
                 Map<String, Object> config = loadConfig();
                 if (config.isEmpty()) {
                     config = new LinkedHashMap<>();
@@ -99,10 +105,13 @@ public class ConfigLoader {
                 Map<String, Object> general = new LinkedHashMap<>();
                 general.put("threads", threads);
                 general.put("similarity_threshold", similarityThreshold);
+                if (lang != null && !lang.isEmpty()) {
+                    general.put("lang", lang);
+                }
                 config.put("general", general);
                 return writeConfig(config);
             }
-            String patched = patchGeneralSection(raw, threads, similarityThreshold);
+            String patched = patchGeneralSection(raw, threads, similarityThreshold, lang);
             return writeConfigText(patched);
         } catch (Exception e) {
             e.printStackTrace();
@@ -128,13 +137,16 @@ public class ConfigLoader {
                 Object profilesObj = config.get("profiles");
                 Map<String, Object> profiles = profilesObj instanceof Map ? (Map<String, Object>) profilesObj : new LinkedHashMap<>();
                 config.put("profiles", profiles);
-                Object wafObj = profiles.get("waf");
+                Object wafObj = profiles.get(Utils.PROFILE_AUTO_WAF_BYPASS);
                 Map<String, Object> waf = wafObj instanceof Map ? (Map<String, Object>) wafObj : new LinkedHashMap<>();
-                profiles.put("waf", waf);
+                profiles.put(Utils.PROFILE_AUTO_WAF_BYPASS, waf);
                 waf.put("options", options);
                 return writeConfig(config);
             }
             String patched = patchWafOptionsSection(raw, options);
+            if (patched == null) {
+                return false;
+            }
             return writeConfigText(patched);
         } catch (Exception e) {
             e.printStackTrace();
@@ -179,17 +191,20 @@ public class ConfigLoader {
         }
     }
 
-    private String patchGeneralSection(String raw, int threads, double similarityThreshold) {
+    private String patchGeneralSection(String raw, int threads, double similarityThreshold, String lang) {
         ArrayList<String> lines = new ArrayList<>();
         Collections.addAll(lines, raw.split("\\r?\\n", -1));
 
         int generalIdx = findTopLevelKey(lines, "general");
         if (generalIdx < 0) {
-            // 直接在文件头追加 general（保守）
             StringBuilder sb = new StringBuilder(raw.length() + 128);
             sb.append("general:\n");
             sb.append("  threads: ").append(threads).append("\n");
-            sb.append("  similarity_threshold: ").append(similarityThreshold).append("\n\n");
+            sb.append("  similarity_threshold: ").append(similarityThreshold).append("\n");
+            if (lang != null && !lang.isEmpty()) {
+                sb.append("  lang: ").append(lang).append("\n");
+            }
+            sb.append("\n");
             sb.append(raw);
             return sb.toString();
         }
@@ -197,6 +212,9 @@ public class ConfigLoader {
         int end = findTopLevelSectionEnd(lines, generalIdx);
         patchScalarInSection(lines, generalIdx + 1, end, 2, "threads", String.valueOf(threads));
         patchScalarInSection(lines, generalIdx + 1, end, 2, "similarity_threshold", String.valueOf(similarityThreshold));
+        if (lang != null && !lang.isEmpty()) {
+            patchScalarInSection(lines, generalIdx + 1, end, 2, "lang", lang);
+        }
         return String.join("\n", lines);
     }
 
@@ -209,31 +227,158 @@ public class ConfigLoader {
 
         int profilesIdx = findTopLevelKey(lines, "profiles");
         if (profilesIdx < 0) {
-            // 不做结构插入，避免大改用户文件；退化为原样返回
-            return raw;
+            return null;
         }
         int profilesEnd = findTopLevelSectionEnd(lines, profilesIdx);
-        int wafIdx = findChildKey(lines, profilesIdx + 1, profilesEnd, 2, "waf");
+        int wafIdx = findChildKey(lines, profilesIdx + 1, profilesEnd, 2, Utils.PROFILE_AUTO_WAF_BYPASS);
         if (wafIdx < 0) {
-            return raw;
+            return null;
         }
         int wafEnd = findSectionEndByIndent(lines, wafIdx, 2);
         int optionsIdx = findChildKey(lines, wafIdx + 1, wafEnd, 4, "options");
         if (optionsIdx < 0) {
-            return raw;
+            return null;
         }
         int optionsEnd = findSectionEndByIndent(lines, optionsIdx, 4);
 
-        // 只更新已知开关（保持注释/格式）：body_charset/body_transform/content_type_spoof
+        // 只更新已知开关（保持注释/格式）：body_charset/body_transform/content_type_spoof/ghost_bits
         Map<String, Object> bodyCharset = safeMap(options.get("body_charset"));
         Map<String, Object> bodyTransform = safeMap(options.get("body_transform"));
         Map<String, Object> contentTypeSpoof = safeMap(options.get("content_type_spoof"));
+        Map<String, Object> ghostBits = safeMap(options.get("ghost_bits"));
 
         patchNestedBools(lines, optionsIdx + 1, optionsEnd, "body_charset", 6, bodyCharset);
         patchNestedBools(lines, optionsIdx + 1, optionsEnd, "body_transform", 6, bodyTransform);
         patchNestedBools(lines, optionsIdx + 1, optionsEnd, "content_type_spoof", 6, contentTypeSpoof);
+        ensureGhostBitsOptionsSection(lines, optionsIdx, ghostBits);
+        optionsEnd = findSectionEndByIndent(lines, optionsIdx, 4);
+        patchGhostBitsOptions(lines, optionsIdx + 1, optionsEnd, ghostBits);
 
         return String.join("\n", lines);
+    }
+
+    private void ensureGhostBitsOptionsSection(ArrayList<String> lines, int optionsIdx, Map<String, Object> ghostBits) {
+        if (ghostBits == null || ghostBits.isEmpty()) return;
+        int optionsEnd = findSectionEndByIndent(lines, optionsIdx, 4);
+        if (findChildKey(lines, optionsIdx + 1, optionsEnd, 6, "ghost_bits") >= 0) {
+            return;
+        }
+        int insertAt = Math.min(optionsEnd, lines.size());
+        Map<String, Object> templates = safeMap(ghostBits.get("templates"));
+        Map<String, Object> generic = safeMap(ghostBits.get("generic"));
+        lines.add(insertAt++, "");
+        lines.add(insertAt++, repeatSpace(6) + "# Ghost Bits 自动绕过（eq/parser 候选，非漏洞确认）");
+        lines.add(insertAt++, repeatSpace(6) + "ghost_bits:");
+        lines.add(insertAt++, repeatSpace(8) + "enabled: " + boolText(ghostBits.get("enabled"), false));
+        lines.add(insertAt++, repeatSpace(8) + "raw_socket: " + boolText(ghostBits.get("raw_socket"), true));
+        Object maxVariants = ghostBits.get("max_variants");
+        lines.add(insertAt++, repeatSpace(8) + "max_variants: "
+                + (maxVariants == null ? "10" : maxVariants.toString()));
+        if (!templates.isEmpty()) {
+            lines.add(insertAt++, "");
+            lines.add(insertAt++, repeatSpace(8) + "templates:");
+            for (Map.Entry<String, Object> e : templates.entrySet()) {
+                if (e.getKey() == null) continue;
+                lines.add(insertAt++, repeatSpace(10) + e.getKey() + ": " + boolText(e.getValue(), false));
+            }
+        }
+        if (!generic.isEmpty()) {
+            Map<String, Object> strategies = safeMap(generic.get("strategies"));
+            lines.add(insertAt++, "");
+            lines.add(insertAt++, repeatSpace(8) + "generic:");
+            lines.add(insertAt++, repeatSpace(10) + "enabled: " + boolText(generic.get("enabled"), false));
+            if (!strategies.isEmpty()) {
+                lines.add(insertAt++, repeatSpace(10) + "strategies:");
+                for (Map.Entry<String, Object> e : strategies.entrySet()) {
+                    if (e.getKey() == null) continue;
+                    lines.add(insertAt++, repeatSpace(12) + e.getKey() + ": " + boolText(e.getValue(), false));
+                }
+            }
+            Object variantCount = generic.get("variant_count");
+            lines.add(insertAt++, repeatSpace(10) + "variant_count: "
+                    + (variantCount == null ? "3" : variantCount.toString()));
+        }
+    }
+
+    private String boolText(Object value, boolean defaultValue) {
+        if (value instanceof Boolean) {
+            return ((Boolean) value) ? "true" : "false";
+        }
+        return defaultValue ? "true" : "false";
+    }
+
+    private void patchGhostBitsOptions(ArrayList<String> lines, int start, int end, Map<String, Object> ghostBits) {
+        if (ghostBits == null || ghostBits.isEmpty()) return;
+        int ghostIdx = findChildKey(lines, start, end, 6, "ghost_bits");
+        if (ghostIdx < 0) return;
+        int ghostEnd = findSectionEndByIndent(lines, ghostIdx, 6);
+
+        patchBooleanScalar(lines, ghostIdx + 1, ghostEnd, 8, "enabled", ghostBits.get("enabled"));
+        patchBooleanScalar(lines, ghostIdx + 1, ghostEnd, 8, "raw_socket", ghostBits.get("raw_socket"));
+        Object maxVariants = ghostBits.get("max_variants");
+        if (maxVariants instanceof Number) {
+            patchScalarInSection(lines, ghostIdx + 1, ghostEnd, 8,
+                    "max_variants", String.valueOf(((Number) maxVariants).intValue()));
+        } else if (maxVariants != null) {
+            patchScalarInSection(lines, ghostIdx + 1, ghostEnd, 8,
+                    "max_variants", maxVariants.toString());
+        }
+
+        Map<String, Object> templates = safeMap(ghostBits.get("templates"));
+        patchNestedBools(lines, ghostIdx + 1, ghostEnd, "templates", 10, templates);
+
+        Map<String, Object> generic = safeMap(ghostBits.get("generic"));
+        ensureGhostGenericSection(lines, ghostIdx, generic);
+        ghostEnd = findSectionEndByIndent(lines, ghostIdx, 6);
+        patchGhostGenericOptions(lines, ghostIdx + 1, ghostEnd, generic);
+    }
+
+    private void ensureGhostGenericSection(ArrayList<String> lines, int ghostIdx, Map<String, Object> generic) {
+        if (generic == null || generic.isEmpty()) return;
+        int ghostEnd = findSectionEndByIndent(lines, ghostIdx, 6);
+        if (findChildKey(lines, ghostIdx + 1, ghostEnd, 8, "generic") >= 0) {
+            return;
+        }
+        int insertAt = Math.min(ghostEnd, lines.size());
+        Map<String, Object> strategies = safeMap(generic.get("strategies"));
+        lines.add(insertAt++, "");
+        lines.add(insertAt++, repeatSpace(8) + "generic:");
+        lines.add(insertAt++, repeatSpace(10) + "enabled: " + boolText(generic.get("enabled"), false));
+        if (!strategies.isEmpty()) {
+            lines.add(insertAt++, repeatSpace(10) + "strategies:");
+            for (Map.Entry<String, Object> e : strategies.entrySet()) {
+                if (e.getKey() == null) continue;
+                lines.add(insertAt++, repeatSpace(12) + e.getKey() + ": " + boolText(e.getValue(), false));
+            }
+        }
+        Object variantCount = generic.get("variant_count");
+        lines.add(insertAt++, repeatSpace(10) + "variant_count: "
+                + (variantCount == null ? "3" : variantCount.toString()));
+    }
+
+    private void patchGhostGenericOptions(ArrayList<String> lines, int start, int end, Map<String, Object> generic) {
+        if (generic == null || generic.isEmpty()) return;
+        int genericIdx = findChildKey(lines, start, end, 8, "generic");
+        if (genericIdx < 0) return;
+        int genericEnd = findSectionEndByIndent(lines, genericIdx, 8);
+
+        patchBooleanScalar(lines, genericIdx + 1, genericEnd, 10, "enabled", generic.get("enabled"));
+        Map<String, Object> strategies = safeMap(generic.get("strategies"));
+        patchNestedBools(lines, genericIdx + 1, genericEnd, "strategies", 12, strategies);
+        Object variantCount = generic.get("variant_count");
+        if (variantCount instanceof Number) {
+            patchScalarInSection(lines, genericIdx + 1, genericEnd, 10,
+                    "variant_count", String.valueOf(((Number) variantCount).intValue()));
+        } else if (variantCount != null) {
+            patchScalarInSection(lines, genericIdx + 1, genericEnd, 10,
+                    "variant_count", variantCount.toString());
+        }
+    }
+
+    private void patchBooleanScalar(ArrayList<String> lines, int start, int end, int indent, String key, Object value) {
+        if (value instanceof Boolean) {
+            patchScalarInSection(lines, start, end, indent, key, ((Boolean) value) ? "true" : "false");
+        }
     }
 
     private void patchNestedBools(ArrayList<String> lines, int start, int end, String sectionKey, int childIndent, Map<String, Object> boolMap) {
@@ -408,5 +553,3 @@ public class ConfigLoader {
         }
     }
 }
-
-

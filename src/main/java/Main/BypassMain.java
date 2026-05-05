@@ -1,5 +1,8 @@
 package Main;
 
+import Main.ghostbits.AutoGhostBitsGenerator;
+import Main.ghostbits.GhostBitsAutoVariant;
+import Main.ghostbits.RawSocketSender;
 import burp.*;
 import org.apache.commons.lang3.StringUtils;
 
@@ -317,7 +320,8 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
 
                 if (finalResponse != null && finalResponseBytes != null && shouldLog) {
                     String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
-                    addLog(finalResponse, 0, 0, 0, title, tool);
+                    String reason = buildAutoReason(oldStatus, newStatus, ratio, threshold, statusClassChanged);
+                    addLog(finalResponse, title, tool, reason);
                 }
 
             } catch (Throwable ee) {
@@ -331,6 +335,45 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         return statusCode == 200 || statusCode == 206 || statusCode == 304
                 || statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307 || statusCode == 308
                 || statusCode == 405 || statusCode == 415;
+    }
+
+    /**
+     * Dashboard only persists addLog's 200/405/415 subset; this reason explains
+     * the already-accepted candidate without changing that existing filter.
+     */
+    static String buildAutoReason(short oldStatus, short newStatus,
+                                  double ratio, double threshold,
+                                  boolean statusClassChanged) {
+        StringBuilder sb = new StringBuilder();
+        boolean hasStatus = oldStatus > 0 || newStatus > 0;
+        if (hasStatus) {
+            sb.append("status:")
+                    .append(formatStatus(oldStatus))
+                    .append(" -> ")
+                    .append(formatStatus(newStatus));
+        }
+
+        boolean ratioUsable = Double.isFinite(ratio) && Double.isFinite(threshold);
+        if (ratioUsable && ratio < threshold) {
+            if (sb.length() > 0) {
+                sb.append("; ");
+            }
+            sb.append("sim:")
+                    .append(String.format(Locale.ROOT, "%.2f", ratio))
+                    .append(" < ")
+                    .append(String.format(Locale.ROOT, "%.2f", threshold));
+        } else if (statusClassChanged) {
+            if (sb.length() > 0) {
+                sb.append("; ");
+            }
+            sb.append("class changed");
+        }
+
+        return sb.toString();
+    }
+
+    private static String formatStatus(short status) {
+        return status <= 0 ? "?" : Short.toString(status);
     }
 
     private static boolean isRedirectStatus(short statusCode) {
@@ -523,7 +566,7 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
 
                     new Thread(() -> {
                         IHttpRequestResponse[] iHttpRequestResponses = invocation.getSelectedMessages();
-                        processHttp(iHttpRequestResponses, "Auth Bypass (Auto)", "access_control");
+                        processHttp(iHttpRequestResponses, "send access", Utils.PROFILE_AUTO_ACCESS_BYPASS);
                     }).start();
 
                 }
@@ -533,8 +576,8 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                 public void actionPerformed(ActionEvent e) {
                     new Thread(() -> {
                         IHttpRequestResponse[] iHttpRequestResponses = invocation.getSelectedMessages();
-                        // WAF 模式：若配置未提供 waf profile，会回退到 access_control
-                        processHttp(iHttpRequestResponses, "WAF Bypass (Auto)", "waf");
+                        // WAF 模式：使用 profiles.auto_waf_bypass
+                        processHttp(iHttpRequestResponses, "send waf", Utils.PROFILE_AUTO_WAF_BYPASS);
                     }).start();
                 }
             });
@@ -558,7 +601,7 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         return list;
     }
 
-    private void addLog(IHttpRequestResponse messageInfo, int toolFlag, long time, int row, String title, String tool) {
+    private void addLog(IHttpRequestResponse messageInfo, String title, String tool, String reason) {
         // 入表写 UI：放到 EDT 串行执行，避免并发写 ArrayList 造成数据竞争
         try {
             short statusCode = Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatusCode();
@@ -572,7 +615,7 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                         Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatusCode(),
                         Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatedMimeType(),
                         title,
-                        nextId(), tool));
+                        nextId(), tool, reason));
             }
         } catch (Exception ignored) {
         }
@@ -641,7 +684,7 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
             }
 
             // WAF 模式：额外生成 Body 编码变体（仅 POST/PUT/PATCH）
-            if ("waf".equals(profile)) {
+            if (Utils.PROFILE_AUTO_WAF_BYPASS.equals(profile)) {
                 byte[] requestBytes = iHttpRequestResponse.getRequest();
                 if (requestBytes != null) {
                     IRequestInfo wafReqInfo = Utils.helpers.analyzeRequest(iHttpRequestResponse.getHttpService(),
@@ -657,12 +700,25 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                             es.submit(new Run_body_encoded_request(encodedRequest, iHttpRequestResponse, tool));
                         }
                     }
+
+                    List<GhostBitsAutoVariant> ghostVariants = generateGhostBitsAutoVariants(requestBytes);
+                    addAllRequestNum(ghostVariants.size());
+                    for (GhostBitsAutoVariant variant : ghostVariants) {
+                        es.submit(new Run_ghost_bits_request(variant, iHttpRequestResponse, tool));
+                    }
                 }
             }
 
             // 使用全局共享线程池：不在此处 shutdown
         }
 
+    }
+
+    private List<GhostBitsAutoVariant> generateGhostBitsAutoVariants(byte[] requestBytes) {
+        AutoGhostBitsGenerator generator = new AutoGhostBitsGenerator(
+                Utils.getGhostBitsRule(),
+                Utils.getWafGhostBitsOptions());
+        return generator.generate(requestBytes);
     }
 
     /**
@@ -1140,7 +1196,8 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
 
                 if (finalResponse != null && finalResponseBytes != null && shouldLog) {
                     String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
-                    addLog(finalResponse, 0, 0, 0, title, tool);
+                    String reason = buildAutoReason(oldStatus, newStatus, ratio, threshold, statusClassChanged);
+                    addLog(finalResponse, title, tool, reason);
                 }
             } catch (Throwable e) {
                 Utils.panel.addErrorRequestNum(1);
@@ -1148,8 +1205,160 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         }
     }
 
+    private String ghostToolLabel(String tool) {
+        if (tool == null || tool.trim().isEmpty()) {
+            return "ghost";
+        }
+        String normalized = tool.trim().toLowerCase();
+        if ("auto".equals(normalized)) {
+            return "auto-waf/ghost";
+        }
+        if ("send waf".equals(normalized)) {
+            return "send-waf/ghost";
+        }
+        return tool + "/ghost";
+    }
+
+    /**
+     * Auto WAF 的 Ghost Bits 模板探测请求。
+     * 关键区别：path/header 含非 ASCII 或模板 sender=raw 时走 RawSocketSender。
+     */
+    class Run_ghost_bits_request implements Runnable {
+        private final GhostBitsAutoVariant variant;
+        private final IHttpRequestResponse originalReqResp;
+        private final String tool;
+
+        public Run_ghost_bits_request(GhostBitsAutoVariant variant, IHttpRequestResponse originalReqResp, String tool) {
+            this.variant = variant;
+            this.originalReqResp = originalReqResp;
+            this.tool = tool;
+        }
+
+        @Override
+        public void run() {
+            try {
+                IHttpService service = originalReqResp.getHttpService();
+                IHttpRequestResponse finalResponse;
+                if (variant.isRawRequired()) {
+                    finalResponse = sendGhostVariantRaw(variant, service);
+                } else {
+                    IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(service, variant.getRequestBytes());
+                    finalResponse = followRedirectsIfNeeded(firstResponse, variant.getRequestBytes(),
+                            service, MAX_REDIRECT_HOPS);
+                }
+
+                byte[] finalResponseBytes = finalResponse == null ? null : finalResponse.getResponse();
+                byte[] oldResponseBytes = originalReqResp.getResponse();
+                short oldStatus = getStatusSafe(oldResponseBytes);
+                short newStatus = getStatusSafe(finalResponseBytes);
+                String newMime = getMimeSafe(finalResponseBytes);
+
+                String oldBody = extractBodyAsString(oldResponseBytes);
+                String newBody = extractBodyAsString(finalResponseBytes);
+                double threshold = Utils.panel.getSimilarityThreshold();
+                double ratio = DiffPage.getRatio(oldBody, newBody, newMime);
+                boolean statusClassChanged = (oldStatus > 0 && newStatus > 0) && (oldStatus / 100 != newStatus / 100);
+
+                String baseReason = buildAutoReason(oldStatus, newStatus, ratio, threshold, statusClassChanged);
+                String signatureReason = buildGhostSignatureReason(newBody);
+                boolean signatureMatched = !signatureReason.isEmpty();
+                boolean shouldLog = isCandidateStatus(newStatus)
+                        && (signatureMatched || ratio < threshold || statusClassChanged);
+                String reason = variant.getReason();
+                if (!baseReason.isEmpty()) {
+                    reason += "; " + baseReason;
+                }
+                if (signatureMatched) {
+                    reason += "; " + signatureReason;
+                }
+
+                addFinishRequestNum(1);
+
+                if (finalResponse != null && finalResponseBytes != null && shouldLog) {
+                    String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
+                    addLog(finalResponse, title, ghostToolLabel(tool), reason);
+                }
+            } catch (Throwable e) {
+                Utils.panel.addErrorRequestNum(1);
+            }
+        }
+    }
+
+    private IHttpRequestResponse sendGhostVariantRaw(GhostBitsAutoVariant variant, IHttpService service) throws Exception {
+        String host = service.getHost();
+        int port = service.getPort();
+        boolean https = "https".equalsIgnoreCase(service.getProtocol());
+        if (port <= 0) {
+            port = https ? 443 : 80;
+        }
+        RawSocketSender.RawResponse raw = new RawSocketSender().send(host, port, https,
+                variant.getRequestBytes(), 5000, 5000);
+        return new SimpleHttpRequestResponse(service,
+                raw.getRequestBytesActuallySent(),
+                raw.getResponseBytes());
+    }
+
+    private String buildGhostSignatureReason(String body) {
+        if (body == null || body.isEmpty()) {
+            return "";
+        }
+        String lower = body.toLowerCase(Locale.ROOT);
+        if (lower.contains("root:x:") || lower.contains("/bin/bash")
+                || lower.contains("nologin") || lower.contains("daemon:x:")) {
+            return "ghost file signature matched";
+        }
+        if (lower.contains("[fonts]") || lower.contains("[extensions]") || lower.contains("[mci extensions]")) {
+            return "ghost file signature matched";
+        }
+        return "";
+    }
+
+    static class SimpleHttpRequestResponse implements IHttpRequestResponse {
+        private byte[] request;
+        private byte[] response;
+        private String comment;
+        private String highlight;
+        private IHttpService service;
+
+        SimpleHttpRequestResponse(IHttpService service, byte[] request, byte[] response) {
+            this.service = service;
+            this.request = request == null ? new byte[0] : request;
+            this.response = response == null ? new byte[0] : response;
+        }
+
+        @Override
+        public byte[] getRequest() { return request; }
+
+        @Override
+        public void setRequest(byte[] message) { request = message == null ? new byte[0] : message; }
+
+        @Override
+        public byte[] getResponse() { return response; }
+
+        @Override
+        public void setResponse(byte[] message) { response = message == null ? new byte[0] : message; }
+
+        @Override
+        public String getComment() { return comment; }
+
+        @Override
+        public void setComment(String comment) { this.comment = comment; }
+
+        @Override
+        public String getHighlight() { return highlight; }
+
+        @Override
+        public void setHighlight(String color) { this.highlight = color; }
+
+        @Override
+        public IHttpService getHttpService() { return service; }
+
+        @Override
+        public void setHttpService(IHttpService httpService) { this.service = httpService; }
+    }
+
     public void processHttp(IHttpRequestResponse[] iHttpRequestResponses, String tool) {
-        processHttp(iHttpRequestResponses, tool, "access_control");
+        processHttp(iHttpRequestResponses, tool, Utils.PROFILE_AUTO_ACCESS_BYPASS);
     }
 
     /**
@@ -1177,7 +1386,7 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                         }
                     }
                     new Thread(() -> {
-                        processHttp(iHttpRequestResponses, "Auto Scan", "access_control");
+                        processHttp(iHttpRequestResponses, "auto", Utils.PROFILE_AUTO_ACCESS_BYPASS);
                     }).start();
 
                 }

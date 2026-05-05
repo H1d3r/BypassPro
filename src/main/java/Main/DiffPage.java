@@ -34,6 +34,7 @@ public class DiffPage {
      * @return String
      */
     public static String getFilteredPageContent(String htmlStr) {
+        htmlStr = capForNormalization(htmlStr);
         // 将实体字符串转义返回 如: "&lt;"="<", "&gt;"=">", "&quot;"="\"", "&nbsp;"=" ", "&amp;"="&"
         htmlStr = htmlStr.replace("&lt;", "<");
         htmlStr = htmlStr.replace("&gt;", ">");
@@ -75,7 +76,7 @@ public class DiffPage {
         }
 
         String ct = contentType == null ? "" : contentType.toLowerCase();
-        String s = body;
+        String s = capForNormalization(body);
 
         if (looksLikeJson(ct, s)) {
             s = normalizeJsonText(s);
@@ -90,6 +91,16 @@ public class DiffPage {
             s = s.substring(0, MAX_COMPARE_LEN);
         }
         return s;
+    }
+
+    private static String capForNormalization(String s) {
+        if (s == null) {
+            return "";
+        }
+        if (s.length() <= MAX_COMPARE_LEN) {
+            return s;
+        }
+        return s.substring(0, MAX_COMPARE_LEN);
     }
 
     private static boolean looksLikeJson(String contentType, String body) {

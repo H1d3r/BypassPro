@@ -27,6 +27,9 @@ package Main;
 import burp.*;
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumn;
+import java.awt.Component;
 
 public class BypassTable extends JTable implements IMessageEditorController {
 
@@ -42,16 +45,50 @@ public class BypassTable extends JTable implements IMessageEditorController {
         this.requestViewer = BurpExtender.callbacks.createMessageEditor(this, false);
         this.responseViewer = BurpExtender.callbacks.createMessageEditor(this, false);
         setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        getColumnModel().getColumn(0).setMinWidth(80);
-        getColumnModel().getColumn(1).setMinWidth(100);
-        getColumnModel().getColumn(2).setMinWidth(150);
-        getColumnModel().getColumn(3).setMinWidth(100);
-        getColumnModel().getColumn(4).setMinWidth(100);
-        getColumnModel().getColumn(5).setPreferredWidth(1100);
-        getColumnModel().getColumn(6).setMinWidth(100);
-        getColumnModel().getColumn(7).setMinWidth(80);
-        getColumnModel().getColumn(8).setMinWidth(120);
+        configureColumns();
         setAutoCreateRowSorter(true);
+    }
+
+    private void configureColumns() {
+        setColumnWidth(0, 60, 80);    // id
+        setColumnWidth(1, 80, 100);   // tool
+        setColumnWidth(2, 120, 220);  // Title
+        setColumnWidth(3, 60, 80);    // Method
+        setColumnWidth(4, 70, 90);    // Length
+        setColumnWidth(5, 220, 720);  // Request URL
+        setColumnWidth(6, 80, 110);   // MIME Type
+        setColumnWidth(7, 80, 100);   // HTTP Status
+        setColumnWidth(8, 200, 360);  // Reason
+
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+        int[] centeredColumns = {0, 1, 3, 4, 6, 7};
+        for (int col : centeredColumns) {
+            getColumnModel().getColumn(col).setCellRenderer(centerRenderer);
+        }
+
+        getColumnModel().getColumn(8).setCellRenderer(new ReasonCellRenderer());
+    }
+
+    private void setColumnWidth(int columnIndex, int minWidth, int preferredWidth) {
+        TableColumn column = getColumnModel().getColumn(columnIndex);
+        column.setMinWidth(minWidth);
+        column.setPreferredWidth(preferredWidth);
+    }
+
+    private static class ReasonCellRenderer extends DefaultTableCellRenderer {
+        ReasonCellRenderer() {
+            setHorizontalAlignment(SwingConstants.LEFT);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            String text = value == null ? "" : value.toString();
+            setToolTipText(text.isEmpty() ? null : text);
+            return c;
+        }
     }
 
 
