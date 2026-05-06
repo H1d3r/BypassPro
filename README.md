@@ -257,7 +257,7 @@ Ghost 还原后还是 ../
 
 这会让后续路径规范化更早看到 `../`，不一定能绕过 Spring 的字面量检查。CVE-2025-41242 这条链需要的是 `.%u002e` 这个中间态。
 
-<video width="800" controls><source src="https://github.com/0x727/BypassPro/blob/main/image/%E5%BD%95%E5%B1%8F2026-05-05%2018.39.57.mov" type="video/quicktime"></video>
+[查看演示视频](image/录屏2026-05-05%2018.39.57.mov)
 
 
 推荐做法二：直接用模板。
@@ -990,4 +990,3 @@ ok BypassPro给出 bypass 的payload：/api/v1/terminal/sessions.json?limit=1
 emmm这个时候还是老版本，
 
 <img width="2866" height="1460" alt="image" src="https://github.com/user-attachments/assets/208ef4ff-3d3a-434f-85d8-bac3e34518f3" />
-
