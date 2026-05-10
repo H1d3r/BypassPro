@@ -221,6 +221,21 @@ public class Utils {
     }
 
     /**
+     * 获取 Follow Redirect 最大跳转次数
+     */
+    public static int getConfigMaxRedirects(int defaultValue) {
+        Map<String, Object> general = getGeneralConfig();
+        Object maxRedirectsObj = general.get("max_redirects");
+        if (maxRedirectsObj instanceof Number) {
+            int value = ((Number) maxRedirectsObj).intValue();
+            if (value >= 1 && value <= 10) {
+                return value;
+            }
+        }
+        return defaultValue;
+    }
+
+    /**
      * 获取配置的相似度阈值
      */
     public static double getConfigSimilarityThreshold(double defaultValue) {

@@ -10,7 +10,7 @@ public class BurpExtender implements IBurpExtender, IExtensionStateListener {
     public static IBurpExtenderCallbacks callbacks;
     private MainPanel panel;
     private String NAME = "BypassPro";
-    private String VERSION = "5.0";
+    private String VERSION = "5.1";
 
     public void registerExtenderCallbacks(IBurpExtenderCallbacks callbacks) {
 

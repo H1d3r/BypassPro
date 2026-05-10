@@ -88,13 +88,20 @@ public class ConfigLoader {
      * 保存 general 配置
      */
     public boolean saveGeneralConfig(int threads, double similarityThreshold) {
-        return saveGeneralConfig(threads, similarityThreshold, null);
+        return saveGeneralConfig(threads, readExistingMaxRedirects(), similarityThreshold, null);
     }
 
     /**
      * 保存 general 配置（含语言）。lang 为 null 时不修改语言字段。
      */
     public boolean saveGeneralConfig(int threads, double similarityThreshold, String lang) {
+        return saveGeneralConfig(threads, readExistingMaxRedirects(), similarityThreshold, lang);
+    }
+
+    /**
+     * 保存 general 配置（含 Follow Redirect 最大跳转次数）。
+     */
+    public boolean saveGeneralConfig(int threads, int maxRedirects, double similarityThreshold, String lang) {
         try {
             String raw = readConfigText();
             if (raw == null || raw.isEmpty()) {
@@ -104,6 +111,7 @@ public class ConfigLoader {
                 }
                 Map<String, Object> general = new LinkedHashMap<>();
                 general.put("threads", threads);
+                general.put("max_redirects", maxRedirects);
                 general.put("similarity_threshold", similarityThreshold);
                 if (lang != null && !lang.isEmpty()) {
                     general.put("lang", lang);
@@ -111,7 +119,7 @@ public class ConfigLoader {
                 config.put("general", general);
                 return writeConfig(config);
             }
-            String patched = patchGeneralSection(raw, threads, similarityThreshold, lang);
+            String patched = patchGeneralSection(raw, threads, maxRedirects, similarityThreshold, lang);
             return writeConfigText(patched);
         } catch (Exception e) {
             e.printStackTrace();
@@ -191,7 +199,7 @@ public class ConfigLoader {
         }
     }
 
-    private String patchGeneralSection(String raw, int threads, double similarityThreshold, String lang) {
+    private String patchGeneralSection(String raw, int threads, int maxRedirects, double similarityThreshold, String lang) {
         ArrayList<String> lines = new ArrayList<>();
         Collections.addAll(lines, raw.split("\\r?\\n", -1));
 
@@ -200,6 +208,7 @@ public class ConfigLoader {
             StringBuilder sb = new StringBuilder(raw.length() + 128);
             sb.append("general:\n");
             sb.append("  threads: ").append(threads).append("\n");
+            sb.append("  max_redirects: ").append(maxRedirects).append("\n");
             sb.append("  similarity_threshold: ").append(similarityThreshold).append("\n");
             if (lang != null && !lang.isEmpty()) {
                 sb.append("  lang: ").append(lang).append("\n");
@@ -211,11 +220,32 @@ public class ConfigLoader {
 
         int end = findTopLevelSectionEnd(lines, generalIdx);
         patchScalarInSection(lines, generalIdx + 1, end, 2, "threads", String.valueOf(threads));
+        patchScalarAfterKeyInSection(lines, generalIdx + 1, end, 2,
+                "max_redirects", String.valueOf(maxRedirects), "threads");
         patchScalarInSection(lines, generalIdx + 1, end, 2, "similarity_threshold", String.valueOf(similarityThreshold));
         if (lang != null && !lang.isEmpty()) {
             patchScalarInSection(lines, generalIdx + 1, end, 2, "lang", lang);
         }
         return String.join("\n", lines);
+    }
+
+    @SuppressWarnings("unchecked")
+    private int readExistingMaxRedirects() {
+        try {
+            Map<String, Object> config = loadConfig();
+            Object generalObj = config.get("general");
+            if (generalObj instanceof Map) {
+                Object maxObj = ((Map<String, Object>) generalObj).get("max_redirects");
+                if (maxObj instanceof Number) {
+                    int value = ((Number) maxObj).intValue();
+                    if (value >= 1 && value <= 10) {
+                        return value;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return 3;
     }
 
     private String patchWafOptionsSection(String raw, Map<String, Object> options) {
@@ -467,6 +497,32 @@ public class ConfigLoader {
             }
         }
         // 未找到：插入到 section 末尾前
+        int insertAt = Math.min(end, lines.size());
+        lines.add(insertAt, repeatSpace(indent) + key + ": " + value);
+    }
+
+    private static void patchScalarAfterKeyInSection(ArrayList<String> lines, int start, int end, int indent,
+                                                     String key, String value, String afterKey) {
+        Pattern target = Pattern.compile("^" + Pattern.quote(repeatSpace(indent) + key) + "\\s*:\\s*([^#]*)(.*)$");
+        for (int i = start; i < end && i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line == null) continue;
+            Matcher m = target.matcher(line);
+            if (m.find()) {
+                String tail = m.group(2) == null ? "" : m.group(2);
+                lines.set(i, repeatSpace(indent) + key + ": " + value + tail);
+                return;
+            }
+        }
+
+        Pattern anchor = Pattern.compile("^" + Pattern.quote(repeatSpace(indent) + afterKey) + "\\s*:");
+        for (int i = start; i < end && i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line != null && anchor.matcher(line).find()) {
+                lines.add(i + 1, repeatSpace(indent) + key + ": " + value);
+                return;
+            }
+        }
         int insertAt = Math.min(end, lines.size());
         lines.add(insertAt, repeatSpace(indent) + key + ": " + value);
     }

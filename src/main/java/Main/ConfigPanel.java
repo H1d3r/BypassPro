@@ -27,6 +27,7 @@ public class ConfigPanel extends JPanel {
 
     // General Options
     private final JTextField tfThreads;
+    private final JTextField tfMaxRedirects;
     private final JTextField tfSimilarityThreshold;
     private final JComboBox<String> cbLang;
 
@@ -92,6 +93,7 @@ public class ConfigPanel extends JPanel {
 
         // General Options
         tfThreads = new JTextField(5);
+        tfMaxRedirects = new JTextField(5);
         tfSimilarityThreshold = new JTextField(5);
         cbLang = new JComboBox<>(new String[]{I18n.ZH, I18n.EN});
 
@@ -177,6 +179,12 @@ public class ConfigPanel extends JPanel {
         threadsPanel.add(tfThreads);
         optionsPanel.add(threadsPanel);
 
+        JPanel redirectPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        redirectPanel.add(new JLabel(I18n.t("config.general.max_redirects")));
+        redirectPanel.add(tfMaxRedirects);
+        redirectPanel.add(new JLabel(I18n.t("config.general.max_redirects.hint")));
+        optionsPanel.add(redirectPanel);
+
         JPanel thresholdPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         thresholdPanel.add(new JLabel(I18n.t("config.general.threshold")));
         thresholdPanel.add(tfSimilarityThreshold);
@@ -218,6 +226,7 @@ public class ConfigPanel extends JPanel {
 
         try {
             int threads = Integer.parseInt(tfThreads.getText().trim());
+            int maxRedirects = Integer.parseInt(tfMaxRedirects.getText().trim());
             double threshold = Double.parseDouble(tfSimilarityThreshold.getText().trim());
             String lang = (String) cbLang.getSelectedItem();
             String oldLang = I18n.getLang();
@@ -228,6 +237,12 @@ public class ConfigPanel extends JPanel {
                         I18n.t("dialog.error.title"), JOptionPane.ERROR_MESSAGE);
                 return;
             }
+            if (maxRedirects < 1 || maxRedirects > 10) {
+                JOptionPane.showMessageDialog(this,
+                        I18n.t("config.dialog.max_redirects_range"),
+                        I18n.t("dialog.error.title"), JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             if (threshold < 0 || threshold > 1) {
                 JOptionPane.showMessageDialog(this,
                         I18n.t("config.dialog.threshold_range"),
@@ -235,7 +250,7 @@ public class ConfigPanel extends JPanel {
                 return;
             }
 
-            boolean success = loader.saveGeneralConfig(threads, threshold, lang);
+            boolean success = loader.saveGeneralConfig(threads, maxRedirects, threshold, lang);
             if (success) {
                 Map<String, Object> config = loader.loadConfig();
                 Utils.setConfigMap(config);
@@ -412,15 +427,18 @@ public class ConfigPanel extends JPanel {
 
     private void loadGeneralOptions() {
         int threads = Utils.getConfigThreads(5);
+        int maxRedirects = Utils.getConfigMaxRedirects(3);
         double threshold = Utils.getConfigSimilarityThreshold(0.85);
         String lang = Utils.getConfigLang();
         tfThreads.setText(String.valueOf(threads));
+        tfMaxRedirects.setText(String.valueOf(maxRedirects));
         tfSimilarityThreshold.setText(String.valueOf(threshold));
         cbLang.setSelectedItem(lang);
     }
 
     private void resetGeneralOptions() {
         tfThreads.setText("5");
+        tfMaxRedirects.setText("3");
         tfSimilarityThreshold.setText("0.85");
         cbLang.setSelectedItem(I18n.ZH);
     }

@@ -26,8 +26,7 @@ import java.util.zip.GZIPOutputStream;
 
 public class BypassMain implements IContextMenuFactory, IProxyListener {
 
-    // 重定向最大跳数
-    private static final int MAX_REDIRECT_HOPS = 2;
+    private static final int DEFAULT_MAX_REDIRECT_HOPS = 3;
 
     private static synchronized long nextId() {
         return Utils.count++;
@@ -225,11 +224,16 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         private BaseRequest baseRequest;
         private IHttpRequestResponse iHttpRequestResponse;
         private String tool;
+        private final boolean followRedirect;
+        private final int maxRedirects;
 
-        public Run_request(BaseRequest baseRequest, IHttpRequestResponse iHttpRequestResponse, String tool) {
+        public Run_request(BaseRequest baseRequest, IHttpRequestResponse iHttpRequestResponse, String tool,
+                           boolean followRedirect, int maxRedirects) {
             this.baseRequest = baseRequest;
             this.iHttpRequestResponse = iHttpRequestResponse;
             this.tool = tool;
+            this.followRedirect = followRedirect;
+            this.maxRedirects = maxRedirects;
         }
 
         @Override
@@ -295,13 +299,11 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                 }
                 byte[] newRequestBytes = Utils.helpers.buildHttpMessage(newHeaders, body);
 
-                IHttpRequestResponse firstResponse = Utils.callbacks
-                        .makeHttpRequest(iHttpRequestResponse.getHttpService(), newRequestBytes);
-                IHttpRequestResponse finalResponse = followRedirectsIfNeeded(firstResponse, newRequestBytes,
-                        iHttpRequestResponse.getHttpService(), MAX_REDIRECT_HOPS);
+                SendResult sendResult = sendWithRedirectPolicy(iHttpRequestResponse.getHttpService(),
+                        newRequestBytes, followRedirect, maxRedirects);
 
                 byte[] oldResponseBytes = iHttpRequestResponse.getResponse();
-                byte[] finalResponseBytes = (finalResponse == null) ? null : finalResponse.getResponse();
+                byte[] finalResponseBytes = sendResult.getJudgedResponseBytes();
 
                 short oldStatus = getStatusSafe(oldResponseBytes);
                 short newStatus = getStatusSafe(finalResponseBytes);
@@ -318,10 +320,10 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                 // Utils.panel.addFinishRequestNum(1);
                 addFinishRequestNum(1);
 
-                if (finalResponse != null && finalResponseBytes != null && shouldLog) {
+                if (sendResult.judgedMessage != null && finalResponseBytes != null && shouldLog) {
                     String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
                     String reason = buildAutoReason(oldStatus, newStatus, ratio, threshold, statusClassChanged);
-                    addLog(finalResponse, title, tool, reason);
+                    addLog(sendResult, title, tool, reason);
                 }
 
             } catch (Throwable ee) {
@@ -434,60 +436,73 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         return null;
     }
 
-    private IHttpRequestResponse followRedirectsIfNeeded(IHttpRequestResponse firstResponse,
-            byte[] originalRequestBytes, IHttpService service, int maxHops) {
-        if (firstResponse == null || firstResponse.getResponse() == null || service == null) {
-            return firstResponse;
+    private SendResult sendWithRedirectPolicy(IHttpService service, byte[] requestBytes,
+                                              boolean followRedirect, int maxRedirects) {
+        int maxHops = normalizeMaxRedirects(maxRedirects);
+        IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(service, requestBytes);
+        SendResult result = new SendResult(service, requestBytes, firstResponse, followRedirect, maxHops);
+        if (!followRedirect || firstResponse == null || firstResponse.getResponse() == null || service == null) {
+            return result;
         }
 
         IHttpRequestResponse current = firstResponse;
+        byte[] currentRequestBytes = requestBytes;
         java.util.HashSet<String> visited = new java.util.HashSet<>();
 
         for (int i = 0; i < maxHops; i++) {
             byte[] resp = current.getResponse();
             if (resp == null) {
-                return current;
+                return result;
             }
             short code = getStatusSafe(resp);
             if (!isRedirectStatus(code)) {
-                return current;
+                return result;
             }
 
             List<String> headers = Utils.helpers.analyzeResponse(resp).getHeaders();
             String location = findHeaderValue(headers, "Location");
             if (location == null || location.isEmpty()) {
-                return current;
+                return result;
             }
 
             try {
-                URL base = Utils.helpers.analyzeRequest(service, originalRequestBytes).getUrl();
+                URL base = Utils.helpers.analyzeRequest(service, currentRequestBytes).getUrl();
                 URL next = new URL(base, location);
                 if (!service.getHost().equalsIgnoreCase(next.getHost())) {
-                    return current;
+                    return result;
                 }
                 String protocol = next.getProtocol();
                 if (protocol != null && !protocol.equalsIgnoreCase(service.getProtocol())) {
-                    return current;
+                    return result;
                 }
                 String key = next.toString();
                 if (!visited.add(key)) {
-                    return current;
+                    return result;
                 }
 
                 String method = (code == 307 || code == 308)
-                        ? Utils.helpers.analyzeRequest(service, originalRequestBytes).getMethod()
+                        ? Utils.helpers.analyzeRequest(service, currentRequestBytes).getMethod()
                         : "GET";
-                byte[] nextReq = buildFollowRequest(originalRequestBytes, service, next, method);
+                byte[] nextReq = buildFollowRequest(currentRequestBytes, service, next, method);
                 current = Utils.callbacks.makeHttpRequest(service, nextReq);
                 if (current == null) {
-                    return null;
+                    return result;
                 }
+                currentRequestBytes = nextReq;
+                result.recordRedirect(next, current);
             } catch (Exception e) {
-                return current;
+                return result;
             }
         }
 
-        return current;
+        return result;
+    }
+
+    private static int normalizeMaxRedirects(int maxRedirects) {
+        if (maxRedirects < 1) {
+            return DEFAULT_MAX_REDIRECT_HOPS;
+        }
+        return Math.min(maxRedirects, 10);
     }
 
     private byte[] buildFollowRequest(byte[] originalRequestBytes, IHttpService service, URL nextUrl, String method) {
@@ -521,6 +536,71 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
             updateOrAddHeader(headers, "Content-Length", String.valueOf(body.length));
         }
         return Utils.helpers.buildHttpMessage(headers, body);
+    }
+
+    private static class SendResult {
+        final IHttpRequestResponse testedMessage;
+        IHttpRequestResponse judgedMessage;
+        final URL testedUrl;
+        URL finalUrl;
+        final boolean followRedirect;
+        final int maxRedirects;
+        int redirectCount;
+        final List<String> redirectChain = new ArrayList<>();
+
+        SendResult(IHttpService service, byte[] testedRequestBytes, IHttpRequestResponse testedMessage,
+                   boolean followRedirect, int maxRedirects) {
+            this.testedMessage = testedMessage;
+            this.judgedMessage = testedMessage;
+            this.followRedirect = followRedirect;
+            this.maxRedirects = maxRedirects;
+            this.testedUrl = analyzeUrl(service, testedRequestBytes);
+            this.finalUrl = this.testedUrl;
+            if (this.testedUrl != null) {
+                this.redirectChain.add(displayUrl(this.testedUrl));
+            }
+        }
+
+        void recordRedirect(URL nextUrl, IHttpRequestResponse nextMessage) {
+            redirectCount++;
+            finalUrl = nextUrl;
+            judgedMessage = nextMessage;
+            redirectChain.add(displayUrl(nextUrl));
+        }
+
+        byte[] getJudgedResponseBytes() {
+            return judgedMessage == null ? null : judgedMessage.getResponse();
+        }
+
+        String redirectDisplay() {
+            if (!followRedirect) {
+                return "false";
+            }
+            return "true " + redirectCount + "/" + maxRedirects;
+        }
+
+        String redirectTooltip() {
+            if (redirectChain.size() <= 1) {
+                return "";
+            }
+            return StringUtils.join(redirectChain, " -> ");
+        }
+
+        private static URL analyzeUrl(IHttpService service, byte[] requestBytes) {
+            try {
+                return Utils.helpers.analyzeRequest(service, requestBytes).getUrl();
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        private static String displayUrl(URL url) {
+            if (url == null) {
+                return "";
+            }
+            String file = url.getFile();
+            return (file == null || file.isEmpty()) ? url.toString() : file;
+        }
     }
 
     private void removeHeadersIgnoreCase(List<String> headers, String... names) {
@@ -601,17 +681,25 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         return list;
     }
 
-    private void addLog(IHttpRequestResponse messageInfo, String title, String tool, String reason) {
+    private void addLog(SendResult sendResult, String title, String tool, String reason) {
         // 入表写 UI：放到 EDT 串行执行，避免并发写 ArrayList 造成数据竞争
         try {
+            IHttpRequestResponse messageInfo = sendResult.judgedMessage;
+            if (messageInfo == null || messageInfo.getResponse() == null) {
+                return;
+            }
             short statusCode = Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatusCode();
             if (statusCode == 200 || statusCode == 405 || statusCode == 415) {
+                String displayMethod = Utils.helpers.analyzeRequest(
+                        sendResult.testedMessage == null ? messageInfo : sendResult.testedMessage).getMethod();
                 Utils.panel.getBypassTableModel().addBypass(new Bypass(
                         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now()),
-                        Utils.helpers.analyzeRequest(messageInfo).getMethod(),
+                        displayMethod,
                         String.valueOf(messageInfo.getResponse().length),
                         Utils.callbacks.saveBuffersToTempFiles(messageInfo),
-                        Utils.helpers.analyzeRequest(messageInfo).getUrl(),
+                        sendResult.testedUrl == null ? Utils.helpers.analyzeRequest(messageInfo).getUrl() : sendResult.testedUrl,
+                        sendResult.redirectDisplay(),
+                        sendResult.redirectTooltip(),
                         Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatusCode(),
                         Utils.helpers.analyzeResponse(messageInfo.getResponse()).getStatedMimeType(),
                         title,
@@ -673,6 +761,8 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
             }
 
             int thread_num = Utils.panel.getThreadNum();
+            boolean followRedirect = Utils.panel != null && Utils.panel.isFollowRedirectEnabled();
+            int maxRedirects = Utils.getConfigMaxRedirects(DEFAULT_MAX_REDIRECT_HOPS);
 
             Utils.out("start thread, number: " + String.valueOf(thread_num) + " path: " + old_path);
             ExecutorService es = Utils.getSharedExecutor(thread_num);
@@ -680,7 +770,8 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
             // 更新请求计数
             addAllRequestNum(allRequests.size());
             for (BaseRequest baseRequest : allRequests) {
-                es.submit(new BypassMain.Run_request(baseRequest, iHttpRequestResponse, tool));
+                es.submit(new BypassMain.Run_request(baseRequest, iHttpRequestResponse, tool,
+                        followRedirect, maxRedirects));
             }
 
             // WAF 模式：额外生成 Body 编码变体（仅 POST/PUT/PATCH）
@@ -697,14 +788,16 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
                         addAllRequestNum(bodyEncodedRequests.size());
 
                         for (byte[] encodedRequest : bodyEncodedRequests) {
-                            es.submit(new Run_body_encoded_request(encodedRequest, iHttpRequestResponse, tool));
+                            es.submit(new Run_body_encoded_request(encodedRequest, iHttpRequestResponse, tool,
+                                    followRedirect, maxRedirects));
                         }
                     }
 
                     List<GhostBitsAutoVariant> ghostVariants = generateGhostBitsAutoVariants(requestBytes);
                     addAllRequestNum(ghostVariants.size());
                     for (GhostBitsAutoVariant variant : ghostVariants) {
-                        es.submit(new Run_ghost_bits_request(variant, iHttpRequestResponse, tool));
+                        es.submit(new Run_ghost_bits_request(variant, iHttpRequestResponse, tool,
+                                followRedirect, maxRedirects));
                     }
                 }
             }
@@ -1161,24 +1254,26 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         private final byte[] requestBytes;
         private final IHttpRequestResponse originalReqResp;
         private final String tool;
+        private final boolean followRedirect;
+        private final int maxRedirects;
 
-        public Run_body_encoded_request(byte[] requestBytes, IHttpRequestResponse originalReqResp, String tool) {
+        public Run_body_encoded_request(byte[] requestBytes, IHttpRequestResponse originalReqResp, String tool,
+                                        boolean followRedirect, int maxRedirects) {
             this.requestBytes = requestBytes;
             this.originalReqResp = originalReqResp;
             this.tool = tool;
+            this.followRedirect = followRedirect;
+            this.maxRedirects = maxRedirects;
         }
 
         @Override
         public void run() {
             try {
-                IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(
-                        originalReqResp.getHttpService(), requestBytes);
-
-                IHttpRequestResponse finalResponse = followRedirectsIfNeeded(
-                        firstResponse, requestBytes, originalReqResp.getHttpService(), MAX_REDIRECT_HOPS);
+                SendResult sendResult = sendWithRedirectPolicy(originalReqResp.getHttpService(), requestBytes,
+                        followRedirect, maxRedirects);
 
                 byte[] oldResponseBytes = originalReqResp.getResponse();
-                byte[] finalResponseBytes = (finalResponse == null) ? null : finalResponse.getResponse();
+                byte[] finalResponseBytes = sendResult.getJudgedResponseBytes();
 
                 short oldStatus = getStatusSafe(oldResponseBytes);
                 short newStatus = getStatusSafe(finalResponseBytes);
@@ -1194,10 +1289,10 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
 
                 addFinishRequestNum(1);
 
-                if (finalResponse != null && finalResponseBytes != null && shouldLog) {
+                if (sendResult.judgedMessage != null && finalResponseBytes != null && shouldLog) {
                     String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
                     String reason = buildAutoReason(oldStatus, newStatus, ratio, threshold, statusClassChanged);
-                    addLog(finalResponse, title, tool, reason);
+                    addLog(sendResult, title, tool, reason);
                 }
             } catch (Throwable e) {
                 Utils.panel.addErrorRequestNum(1);
@@ -1227,27 +1322,33 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
         private final GhostBitsAutoVariant variant;
         private final IHttpRequestResponse originalReqResp;
         private final String tool;
+        private final boolean followRedirect;
+        private final int maxRedirects;
 
-        public Run_ghost_bits_request(GhostBitsAutoVariant variant, IHttpRequestResponse originalReqResp, String tool) {
+        public Run_ghost_bits_request(GhostBitsAutoVariant variant, IHttpRequestResponse originalReqResp, String tool,
+                                      boolean followRedirect, int maxRedirects) {
             this.variant = variant;
             this.originalReqResp = originalReqResp;
             this.tool = tool;
+            this.followRedirect = followRedirect;
+            this.maxRedirects = maxRedirects;
         }
 
         @Override
         public void run() {
             try {
                 IHttpService service = originalReqResp.getHttpService();
-                IHttpRequestResponse finalResponse;
+                SendResult sendResult;
                 if (variant.isRawRequired()) {
-                    finalResponse = sendGhostVariantRaw(variant, service);
+                    IHttpRequestResponse rawResponse = sendGhostVariantRaw(variant, service);
+                    sendResult = new SendResult(service, variant.getRequestBytes(),
+                            rawResponse, followRedirect, normalizeMaxRedirects(maxRedirects));
                 } else {
-                    IHttpRequestResponse firstResponse = Utils.callbacks.makeHttpRequest(service, variant.getRequestBytes());
-                    finalResponse = followRedirectsIfNeeded(firstResponse, variant.getRequestBytes(),
-                            service, MAX_REDIRECT_HOPS);
+                    sendResult = sendWithRedirectPolicy(service, variant.getRequestBytes(),
+                            followRedirect, maxRedirects);
                 }
 
-                byte[] finalResponseBytes = finalResponse == null ? null : finalResponse.getResponse();
+                byte[] finalResponseBytes = sendResult.getJudgedResponseBytes();
                 byte[] oldResponseBytes = originalReqResp.getResponse();
                 short oldStatus = getStatusSafe(oldResponseBytes);
                 short newStatus = getStatusSafe(finalResponseBytes);
@@ -1274,9 +1375,9 @@ public class BypassMain implements IContextMenuFactory, IProxyListener {
 
                 addFinishRequestNum(1);
 
-                if (finalResponse != null && finalResponseBytes != null && shouldLog) {
+                if (sendResult.judgedMessage != null && finalResponseBytes != null && shouldLog) {
                     String title = Utils.getBodyTitle(new String(finalResponseBytes, "utf-8"));
-                    addLog(finalResponse, title, ghostToolLabel(tool), reason);
+                    addLog(sendResult, title, ghostToolLabel(tool), reason);
                 }
             } catch (Throwable e) {
                 Utils.panel.addErrorRequestNum(1);

@@ -58,16 +58,18 @@ public class BypassTable extends JTable implements IMessageEditorController {
         setColumnWidth(5, 220, 720);  // Request URL
         setColumnWidth(6, 80, 110);   // MIME Type
         setColumnWidth(7, 80, 100);   // HTTP Status
-        setColumnWidth(8, 200, 360);  // Reason
+        setColumnWidth(8, 80, 110);   // Redirect
+        setColumnWidth(9, 200, 360);  // Reason
 
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
-        int[] centeredColumns = {0, 1, 3, 4, 6, 7};
+        int[] centeredColumns = {0, 1, 3, 4, 6, 7, 8};
         for (int col : centeredColumns) {
             getColumnModel().getColumn(col).setCellRenderer(centerRenderer);
         }
 
-        getColumnModel().getColumn(8).setCellRenderer(new ReasonCellRenderer());
+        getColumnModel().getColumn(8).setCellRenderer(new RedirectCellRenderer());
+        getColumnModel().getColumn(9).setCellRenderer(new ReasonCellRenderer());
     }
 
     private void setColumnWidth(int columnIndex, int minWidth, int preferredWidth) {
@@ -76,7 +78,28 @@ public class BypassTable extends JTable implements IMessageEditorController {
         column.setPreferredWidth(preferredWidth);
     }
 
-    private static class ReasonCellRenderer extends DefaultTableCellRenderer {
+    private class RedirectCellRenderer extends DefaultTableCellRenderer {
+        RedirectCellRenderer() {
+            setHorizontalAlignment(SwingConstants.CENTER);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            String tooltip = null;
+            int modelRow = table.convertRowIndexToModel(row);
+            Bypass bypassEntry = bypassTableModel.getBypassAt(modelRow);
+            if (bypassEntry != null && bypassEntry.redirectTooltip != null
+                    && !bypassEntry.redirectTooltip.isEmpty()) {
+                tooltip = bypassEntry.redirectTooltip;
+            }
+            setToolTipText(tooltip);
+            return c;
+        }
+    }
+
+    private class ReasonCellRenderer extends DefaultTableCellRenderer {
         ReasonCellRenderer() {
             setHorizontalAlignment(SwingConstants.LEFT);
         }

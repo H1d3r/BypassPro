@@ -1,5 +1,7 @@
 
 
+语言 / Language: [简体中文](README.md) | [English](README_EN.md)
+
 郑重声明：文中所涉及的技术、思路和工具仅供以安全为目的的学习交流使用，任何人不得将其用于非法用途以及盈利等目的，否则后果自行承担。
 
 ### 介绍
@@ -16,9 +18,28 @@
 
 此项目是基于p0desta师傅的项目[https://github.com/p0desta/AutoBypass403-BurpSuite](https://github.com/p0desta/AutoBypass403-BurpSuite)进行二开的。用于权限绕过，403bypass等的自动化bypass的Burpsuite插件。感谢p0desta师傅的开源，本二开项目已经过p0desta师傅本人允许开源。
 
-### 当前版本 BypassPro 5.0 更新
+### 快速目录
 
-BypassPro 5.0 是一次大版本重构：从单一的 403 bypass 工具，扩展为“自动权限绕过 + 自动 WAF 绕过 + 手动 WAF 工作台”的组合型 Burp 插件。本版本重点增强了手动构造能力、Ghost Bits 测试能力、Raw Socket 发包能力和配置可维护性。
+- [快速开始（推荐流程）](#快速开始推荐流程)
+- [三个入口怎么选](#1三个入口怎么选)
+- [只看案例](#历史案例)
+  - [Gh0st Bits 实操案例](#gh0st-bits-实操案例)
+  - [历史案例](#历史案例)
+- [当前版本 BypassPro 5.1 更新](#当前版本-bypasspro-51-更新)
+  - [模式重构](#1-模式重构)
+  - [Manual WAF 工具区重构](#2-manual-waf-工具区重构)
+  - [Gh0st Bits 专区](#3-gh0st-bits-专区)
+  - [Raw Socket 发送](#4-raw-socket-发送)
+  - [Auto WAF 中的 Ghost Bits 绕过](#5-auto-waf-中的-ghost-bits-绕过)
+  - [配置重构](#6-配置重构)
+  - [Dashboard 与结果展示](#7-dashboard-与结果展示)
+- [Auto-权限绕过](#2-auto-权限绕过)
+- [Auto-WAF 绕过](#3-auto-waf绕过)
+- [Manual-WAF 工作台](#4-manual-waf-工作台)
+
+### 当前版本 BypassPro 5.1 更新
+
+BypassPro 5.1 是一次大版本重构：从单一的 403 bypass 工具，扩展为“自动权限绕过 + 自动 WAF 绕过 + 手动 WAF 工作台”的组合型 Burp 插件。本版本重点增强了手动构造能力、Ghost Bits 测试能力、Raw Socket 发包能力和配置可维护性。
 
 #### 1. 模式重构
 
@@ -49,7 +70,7 @@ BypassPro 5.0 是一次大版本重构：从单一的 403 bypass 工具，扩展
   - 使用 Burp 原生 `IMessageEditor`，支持 Pretty / Raw / Hex。
   - 支持 Host / Port / HTTPS 手动修改。
   - 支持 Send / Cancel / Reset / Undo / Redo。
-  - 支持 Follow Redirect，最多 10 跳。
+  - 支持 Follow Redirect，最大跳转次数读取 `general.max_redirects`，默认 3。
   - 支持 History，便于回放和对比。
 
 #### 2. Manual WAF 工具区重构
@@ -67,6 +88,7 @@ BypassPro 5.0 是一次大版本重构：从单一的 403 bypass 工具，扩展
 
 - 有选区时，优先处理用户选中的内容。
 - 多处匹配时，弹出作用域选择：选区处 / 全部 / 第 N 处。
+- 对 URL 编码这类“安全字符默认无变化”的操作，会先确认作用域，再询问是否强制把每个 UTF-8 字节编码成 `%XX`。
 - 没有选区且无法安全推断位置时，会提示用户先选中。
 - 支持保持光标位置，避免点击工具后编辑器跳回开头。
 
@@ -659,6 +681,12 @@ Auto 模式会根据请求内容判断是否需要 Raw Socket。Dashboard 的 Re
 配置文件升级为明确的 profile 结构：
 
 ```yaml
+general:
+  threads: 5
+  max_redirects: 3
+  similarity_threshold: 0.85
+  lang: zh
+
 profiles:
   auto_access_bypass:
     ...
@@ -671,11 +699,12 @@ profiles:
 
 说明：
 
-- 5.0 不再兼容旧的 `profiles.access_control` / `profiles.waf`。
+- 5.x 不再兼容旧的 `profiles.access_control` / `profiles.waf`。
 - 外置配置路径：`~/.config/BypassPro/BypassPro-config.yaml`。
 - 首次启动会从 jar 内置模板生成配置。
 - Config 页面支持 Reload / Reinit / 保存通用配置 / 保存 WAF 选项。
 - 支持界面语言切换：`general.lang: zh | en`。
+- 支持配置 Follow Redirect 最大跳转次数：`general.max_redirects`，Dashboard 自动模式和 Manual WAF 共用，默认 3。
 
 #### 7. Dashboard 与结果展示
 
@@ -683,11 +712,13 @@ Dashboard 也做了重构，不再只是简单堆结果表：
 
 - 顶部控制条改为紧凑布局：
   - `AutoScan` 开关：控制是否监听 Proxy 中的 401/403 响应并自动扫描。
+  - `Follow Redirect` 开关：控制 Dashboard 自动模式是否跟随 `301/302/303/307/308`，默认关闭。
   - `Threads`：当前扫描线程数，默认读取 `general.threads`。
   - `Req: 已完成 / 总数`：显示当前任务进度。
   - 进度条：扫描中为动态进度，完成后显示 100%。
   - `Err`：错误请求计数。
   - `Clear`：清空 Dashboard 结果，并重置计数。
+- `Follow Redirect` 按任务发起时快照生效：同一批 AutoScan / Send 请求使用发起时的开关状态和 `general.max_redirects`，中途切换只影响后续任务。
 - 相似度阈值不再放在 Dashboard 顶部，统一从 Config 的 `general.similarity_threshold` 读取。
 - Dashboard 表格列调整为：
   - `id`
@@ -698,13 +729,21 @@ Dashboard 也做了重构，不再只是简单堆结果表：
   - `Request URL`
   - `MIME Type`
   - `HTTP Status`
+  - `Redirect`
   - `Reason`
 - 表格支持排序，并为常用列设置更合理的宽度。
+- `Request URL` 固定显示 payload 实际作用的 fuzz 目标。即使开启 Follow Redirect 并最终跳到其它 URL，主 URL 也不会被跳转后的地址覆盖。
+- `Redirect` 列显示跳转策略和实际跳数：
+  - `false`：本批任务未启用 Follow Redirect。
+  - `true 0/3`：启用 Follow Redirect，但没有发生跳转。
+  - `true 1/3`：启用 Follow Redirect，实际跟随 1 次，最大 3 次。
+  - 有跳转链时，鼠标悬停可查看完整链路，例如 `/download.do;.css -> /nolimit.jsp`。
 - `Reason` 列展示入表原因，例如：
   - `status:403 -> 200`
   - `sim:0.42 < 0.85`
   - `ghost:spring_static_lfi; target:path; sender:raw`
   - `ghost file signature matched`
+- `Reason` 只表达入表判断依据，不混入 Follow Redirect 开关或跳转次数。
 - `Reason` 列支持 tooltip，内容较长时可以悬停查看完整原因。
 - `tool` 列使用短标签区分来源：
   - `auto`
@@ -722,7 +761,7 @@ Manual WAF 底部也增加了当前请求摘要、payload hints、diff 状态和
 
 #### 1.三个入口怎么选
 
-BypassPro 5.0 主要有四个使用入口：
+BypassPro 5.1 主要有四个使用入口：
 
 
 | 入口                                 | 位置                      | 适合场景                     | 配置                            |
@@ -857,7 +896,7 @@ profiles:
 
 #### 4. Manual-WAF 工作台
 
-Manual-WAF 是 5.0 的核心工作台。它不是自动扫描器，而是给你一个“可编辑请求 + 选区变形 + Raw/Burp 发包 + 历史记录”的绕过实验环境。
+Manual-WAF 是 5.x 的核心工作台。它不是自动扫描器，而是给你一个“可编辑请求 + 选区变形 + Raw/Burp 发包 + 历史记录”的绕过实验环境。
 
 入口：
 
@@ -962,7 +1001,7 @@ Content-Length: 18
 
 ### 历史案例
 
-以下为 BypassPro 早期版本的使用记录，和 5.0 的 Gh0st Bits 工作台不是同一类功能。
+以下为 BypassPro 早期版本的使用记录，和 5.x 的 Gh0st Bits 工作台不是同一类功能。
 
 ### 案例 1
 

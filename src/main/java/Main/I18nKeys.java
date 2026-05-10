@@ -620,6 +620,10 @@ final class I18nKeys {
 
         I18n.put("config.general.title", "通用配置", "General Options");
         I18n.put("config.general.threads", "线程数 (Threads):", "Threads:");
+        I18n.put("config.general.max_redirects", "Max Redirects:", "Max Redirects:");
+        I18n.put("config.general.max_redirects.hint",
+                "(1-10，Dashboard 和 Manual WAF 的 Follow Redirect 共用)",
+                "(1-10, shared by Dashboard and Manual WAF Follow Redirect)");
         I18n.put("config.general.threshold", "相似度阈值 (Diff Thresh):", "Similarity Threshold:");
         I18n.put("config.general.threshold.hint",
                 "(0-1，值越大越\"宽松\"，更容易入表；值越小越\"严格\"，更少噪声)",
@@ -630,8 +634,8 @@ final class I18nKeys {
                 "Save and reload the extension to apply language change");
 
         I18n.put("config.general.help",
-                "说明：\n- 线程数：并发请求数，建议 3-10\n- 相似度阈值：0-1 表示\"响应与原始响应的相似程度\"。\n  - 值越大：越容易入表（更宽松，噪声可能更多）\n  - 值越小：越不容易入表（更严格，只保留差异更大的响应）\n- 语言：切换 UI 语言（zh/en），保存后重启插件生效\n- 修改后点击 Save General 保存到配置文件\n- 保存后立即生效（Dashboard 不再单独维护阈值）",
-                "Notes:\n- Threads: concurrent requests, recommended 3-10\n- Similarity threshold: 0-1 = how similar the response is to the baseline.\n  - Larger: easier to record (looser, more noise)\n  - Smaller: harder to record (stricter, only big diffs kept)\n- Language: UI language (zh/en). Save then reload the extension to apply\n- Click Save General to persist changes\n- Effective immediately after save (Dashboard no longer keeps its own threshold)");
+                "说明：\n- 线程数：并发请求数，建议 3-10\n- Max Redirects：Follow Redirect 最大跳转次数，Dashboard 和 Manual WAF 共用\n- 相似度阈值：0-1 表示\"响应与原始响应的相似程度\"。\n  - 值越大：越容易入表（更宽松，噪声可能更多）\n  - 值越小：越不容易入表（更严格，只保留差异更大的响应）\n- 语言：切换 UI 语言（zh/en），保存后重启插件生效\n- 修改后点击 Save General 保存到配置文件\n- 保存后立即生效（Dashboard 不再单独维护阈值）",
+                "Notes:\n- Threads: concurrent requests, recommended 3-10\n- Max Redirects: max Follow Redirect hops shared by Dashboard and Manual WAF\n- Similarity threshold: 0-1 = how similar the response is to the baseline.\n  - Larger: easier to record (looser, more noise)\n  - Smaller: harder to record (stricter, only big diffs kept)\n- Language: UI language (zh/en). Save then reload the extension to apply\n- Click Save General to persist changes\n- Effective immediately after save (Dashboard no longer keeps its own threshold)");
 
         I18n.put("config.waf.options.title",
                 "Options (仅对 POST/PUT 等有 Body 的请求生效)",
@@ -652,6 +656,9 @@ final class I18nKeys {
         I18n.put("config.dialog.threads_range",
                 "线程数应在 1-100 之间",
                 "Threads must be between 1 and 100");
+        I18n.put("config.dialog.max_redirects_range",
+                "Max Redirects 应在 1-10 之间",
+                "Max Redirects must be between 1 and 10");
         I18n.put("config.dialog.threshold_range",
                 "相似度阈值应在 0-1 之间",
                 "Threshold must be between 0 and 1");

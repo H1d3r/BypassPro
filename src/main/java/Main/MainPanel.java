@@ -22,6 +22,7 @@ public class MainPanel extends JPanel implements ITab {
     private JLabel finishRequestNumberText;
     private JLabel errorRequestNumText;
     private JCheckBox isAutoCheckBox;
+    private JCheckBox followRedirectCheckBox;
     private ConfigPanel configPanel;
     private ManualWafPanel manualWafPanel;
     private JProgressBar progressBar;
@@ -60,6 +61,11 @@ public class MainPanel extends JPanel implements ITab {
         isAutoCheckBox = new JCheckBox("", false);
         isAutoCheckBox.addActionListener(e -> Utils.isProxySelected = isAutoCheckBox.isSelected());
         controlPanel.add(isAutoCheckBox);
+
+        controlPanel.add(new JLabel("Follow Redirect："));
+        followRedirectCheckBox = new JCheckBox("", false);
+        followRedirectCheckBox.setToolTipText("Dashboard auto/send requests follow 301/302/303/307/308 redirects");
+        controlPanel.add(followRedirectCheckBox);
 
         controlPanel.add(new JLabel("Threads:"));
         threadNumText = new JTextField(2);
@@ -172,6 +178,10 @@ public class MainPanel extends JPanel implements ITab {
     public double getSimilarityThreshold() {
         // 统一从 Config 中读取，Dashboard 不再单独维护阈值输入框
         return Utils.getConfigSimilarityThreshold(DEFAULT_SIMILARITY_THRESHOLD);
+    }
+
+    public boolean isFollowRedirectEnabled() {
+        return followRedirectCheckBox != null && followRedirectCheckBox.isSelected();
     }
 
     private void updateProgressBar() {

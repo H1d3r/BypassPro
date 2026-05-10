@@ -3,6 +3,7 @@
 # ==========================================================
 general:
   threads: 5                    # 默认线程数
+  max_redirects: 3              # Follow Redirect 最大跳转次数
   similarity_threshold: 0.85    # 相似度阈值（低于此值才入表）
   lang: zh                      # 界面语言: zh | en (修改后重启插件生效)
 

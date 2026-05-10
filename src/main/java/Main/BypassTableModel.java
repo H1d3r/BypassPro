@@ -54,7 +54,7 @@ public class BypassTableModel extends AbstractTableModel {
     }
 
     public int getColumnCount() {
-        return 9;
+        return 10;
     }
 
     @Override
@@ -78,6 +78,8 @@ public class BypassTableModel extends AbstractTableModel {
             case 7:
                 return "HTTP Status";
             case 8:
+                return "Redirect";
+            case 9:
                 return "Reason";
             default:
                 return "";
@@ -105,6 +107,8 @@ public class BypassTableModel extends AbstractTableModel {
             case 7:
                 return Short.class;
             case 8:
+                return String.class;
+            case 9:
                 return String.class;
             default:
                 return Object.class;
@@ -137,6 +141,8 @@ public class BypassTableModel extends AbstractTableModel {
             case 7:
                 return bypassEntry.status;
             case 8:
+                return bypassEntry.redirect;
+            case 9:
                 return bypassEntry.reason == null ? "" : bypassEntry.reason;
             default:
                 return "";
@@ -158,4 +164,3 @@ public class BypassTableModel extends AbstractTableModel {
     }
 
 }
-

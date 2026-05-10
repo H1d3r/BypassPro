@@ -4024,9 +4024,14 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        Integer selectionIdx = resolveSelectionIndex(getRequestBytes(), sel);
         String selected = new String(sel, StandardCharsets.ISO_8859_1);
         String replaced = transformer.apply(selected);
         if (replaced == null || replaced.equals(selected)) {
+            ReplacementScope scope = chooseReplacementScope(sel, selectionIdx);
+            if (scope == null) {
+                return;
+            }
             int ret = JOptionPane.showConfirmDialog(this, prompt,
                     I18n.t("dialog.tip.title"), JOptionPane.YES_NO_OPTION,
                     JOptionPane.QUESTION_MESSAGE);
@@ -4041,6 +4046,8 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                     statusLabel.setText("No change: fallback left selection unchanged");
                 return;
             }
+            applyReplacementScope(sel, replaced.getBytes(StandardCharsets.ISO_8859_1), scope);
+            return;
         }
         replaceOccurrenceInRequest(sel, replaced.getBytes(StandardCharsets.ISO_8859_1));
     }
@@ -4280,10 +4287,10 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 IHttpRequestResponse resp = null;
                 byte[] respBytes = null;
                 int redirectCount = 0;
-                final int MAX_REDIRECTS = 10;
+                final int MAX_REDIRECTS = Utils.getConfigMaxRedirects(3);
 
                 // 发送请求（可能跟随重定向）
-                while (!isCancelled && redirectCount <= MAX_REDIRECTS) {
+                while (!isCancelled) {
                     resp = Utils.callbacks.makeHttpRequest(currentTarget, finalBytes);
                     if (isCancelled)
                         break;
@@ -4297,6 +4304,9 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                         short statusCode = Utils.helpers.analyzeResponse(respBytes).getStatusCode();
                         if (statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307
                                 || statusCode == 308) {
+                            if (redirectCount >= MAX_REDIRECTS) {
+                                break;
+                            }
                             String location = getHeaderValue(respBytes, "Location");
                             if (location != null && !location.isEmpty()) {
                                 try {
@@ -4802,21 +4812,32 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
 
     private boolean replaceOccurrenceInRequest(byte[] target, byte[] replacement) {
         byte[] msg = getRequestBytes();
+        ReplacementScope scope = chooseReplacementScope(target, resolveSelectionIndex(msg, target));
+        if (scope == null) {
+            return false;
+        }
+        applyReplacementScope(target, replacement, scope);
+        return true;
+    }
+
+    private ReplacementScope chooseReplacementScope(byte[] target, Integer selectionIdx) {
+        byte[] msg = getRequestBytes();
         List<Integer> positions = findAllOccurrences(msg, target);
 
         if (positions.isEmpty()) {
             JOptionPane.showMessageDialog(this, "未找到选中文本在请求中的位置", I18n.t("dialog.tip.title"),
                     JOptionPane.INFORMATION_MESSAGE);
-            return false;
+            return null;
         }
 
         // 唯一匹配：无需交互
         if (positions.size() == 1) {
-            replaceAtIndex(msg, positions.get(0), target.length, replacement);
-            return true;
+            return ReplacementScope.single(positions.get(0));
         }
 
-        Integer selectionIdx = resolveSelectionIndex(msg, target);
+        if (selectionIdx != null && !bytesMatchAt(msg, selectionIdx, target)) {
+            selectionIdx = null;
+        }
 
         List<String> optionList = new ArrayList<>();
         String selectionOption = null;
@@ -4843,26 +4864,56 @@ public class ManualWafPanel extends JPanel implements IMessageEditorController {
                 options[0]);
 
         if (choice == null) {
-            return false;
+            return null;
         }
 
         String choiceStr = choice.toString();
         if (selectionOption != null && choiceStr.equals(selectionOption)) {
-            replaceAtIndex(msg, selectionIdx, target.length, replacement);
-            return true;
+            return ReplacementScope.single(selectionIdx);
         }
         if (choiceStr.equals(allOption)) {
-            replaceAllOccurrences(msg, positions, target.length, replacement);
-            return true;
+            return ReplacementScope.all();
         }
         int headerCount = (selectionOption != null ? 1 : 0) + 1;
         for (int i = 0; i < positions.size(); i++) {
             if (choiceStr.equals(options[headerCount + i])) {
-                replaceAtIndex(msg, positions.get(i), target.length, replacement);
-                return true;
+                return ReplacementScope.single(positions.get(i));
             }
         }
-        return false;
+        return null;
+    }
+
+    private void applyReplacementScope(byte[] target, byte[] replacement, ReplacementScope scope) {
+        byte[] msg = getRequestBytes();
+        if (scope.all) {
+            List<Integer> positions = findAllOccurrences(msg, target);
+            replaceAllOccurrences(msg, positions, target.length, replacement);
+            return;
+        }
+        if (bytesMatchAt(msg, scope.index, target)) {
+            replaceAtIndex(msg, scope.index, target.length, replacement);
+        } else {
+            JOptionPane.showMessageDialog(this, "选区位置已变化，未找到可替换内容", I18n.t("dialog.tip.title"),
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+
+    private static class ReplacementScope {
+        final boolean all;
+        final int index;
+
+        private ReplacementScope(boolean all, int index) {
+            this.all = all;
+            this.index = index;
+        }
+
+        static ReplacementScope all() {
+            return new ReplacementScope(true, -1);
+        }
+
+        static ReplacementScope single(int index) {
+            return new ReplacementScope(false, index);
+        }
     }
 
     /**
